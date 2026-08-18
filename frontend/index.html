@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PDF OLIVEX</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:#f4f6fa;color:#18202a}
+header{background:#0b1428;color:#fff;padding:16px 34px;display:flex;align-items:center;gap:18px;min-height:86px}
+.brand-logo{height:58px;width:auto;object-fit:contain}.brand-title h1{margin:0;font-size:26px}.brand-title p{margin:5px 0 0;color:#c6ceda}
+main{max-width:1240px;margin:24px auto;padding:0 18px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.tab{background:#fff;border:1px solid #dce2ea;color:#374151;padding:10px 16px;border-radius:9px;font-weight:700;cursor:pointer}.tab.active{background:#2563eb;color:#fff}
+.panel{display:none}.panel.active{display:block}.section{background:#fff;border:1px solid #e1e6ed;border-radius:14px;padding:20px;margin-bottom:18px}
+.section h2{margin:0 0 6px}.section p{color:#667085}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{background:#fff;border:1px solid #e0e5ec;border-radius:12px;padding:16px;min-height:185px}.card h3{margin:0 0 7px;font-size:16px}.card p{font-size:13px;color:#667085;min-height:34px}
+input[type=file],input[type=text],input[type=password],input[type=number],select{width:100%;padding:9px;border:1px solid #ccd3dd;border-radius:8px;margin:6px 0}
+button.action{width:100%;padding:10px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;margin-top:5px}button.action:hover{background:#1d4ed8}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.toolbar button{padding:9px 13px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}.toolbar .gray{background:#64748b}.toolbar .red{background:#dc2626}
+.status{display:none;padding:11px;border-radius:9px;background:#eef3fb;margin:12px 0}.pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-top:16px}.pdf-workspace{display:grid;grid-template-columns:260px minmax(0,1fr);gap:16px;align-items:start}
+.pdf-sidebar{background:#f8fafc;border:1px solid #dfe5ee;border-radius:12px;padding:12px;position:sticky;top:12px;max-height:70vh;overflow:auto}
+.pdf-sidebar h3{margin:0 0 10px;font-size:15px}.pdf-list{display:flex;flex-direction:column;gap:7px}
+.pdf-item{display:flex;align-items:center;gap:8px;padding:9px;border:1px solid #d9e0e8;background:#fff;border-radius:9px;cursor:pointer;text-align:left}
+.pdf-item.active{border-color:#2563eb;background:#eef4ff}.pdf-item .pdf-name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.pdf-item .pdf-count{font-size:11px;color:#667085}.pdf-remove{border:0;background:#fee2e2;color:#b91c1c;border-radius:6px;padding:3px 6px;cursor:pointer}
+.org-canvas{min-width:0}.page .source{font-size:10px;color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+@media(max-width:800px){.pdf-workspace{grid-template-columns:1fr}.pdf-sidebar{position:static;max-height:none}}
+.page{background:#fff;border:2px solid #d7dee8;border-radius:10px;padding:8px;cursor:grab;position:relative}.page.selected{border-color:#2563eb;box-shadow:0 0 0 3px #2563eb22}.page canvas{width:100%;display:block}.page .num{text-align:center;font-weight:700;padding:6px}
+.empty{padding:50px;text-align:center;color:#667085;border:2px dashed #c8d0db;border-radius:12px}
+.badge{font-size:11px;background:#eef2f7;color:#5b6574;border-radius:20px;padding:3px 7px}.action:disabled,.toolbar button:disabled{opacity:.5;cursor:not-allowed}.progress{height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:10px 0}.progress>span{display:block;height:100%;width:0;background:#2563eb;transition:width .2s}.tool-note{font-size:11px;color:#667085;margin-top:7px}.history-bar{display:flex;gap:6px;align-items:center;margin:8px 0}.history-bar button{padding:7px 10px;border:1px solid #d7dee8;background:#fff;border-radius:7px;cursor:pointer}.history-bar button:disabled{opacity:.45;cursor:not-allowed}.cap-ok{color:#166534}.cap-no{color:#92400e}
+@media(max-width:950px){.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:600px){.grid{grid-template-columns:1fr}header{padding:12px 18px}.brand-logo{height:48px}}
+</style>
+</head>
+<body>
+<header>
+<img class="brand-logo" src="/assets/olivex_topografia.png" alt="OLIVEX Topografia">
+<div class="brand-title"><h1>PDF OLIVEX</h1><p>Processamento local de PDFs: organize, converta, otimize, edite e proteja seus documentos.</p></div>
+</header>
+<main>
+<div id="capabilities" class="status" style="display:block;margin-bottom:14px">Verificando recursos disponíveis...</div>
+<div class="tabs">
+<button class="tab active" onclick="tab('organizar',this)">Organizar PDF</button>
+<button class="tab" onclick="tab('otimizar',this)">Otimizar PDF</button>
+<button class="tab" onclick="tab('converter',this)">Converter</button>
+<button class="tab" onclick="tab('editar',this)">Editar PDF</button>
+<button class="tab" onclick="tab('seguranca',this)">Segurança</button>
+</div>
+
+<section id="organizar" class="panel active">
+<div class="section">
+<h2>Organizar páginas visualmente</h2>
+<p>Adicione vários PDFs, visualize todos na lateral e arraste as páginas para criar a ordem final.</p>
+<input id="orgFile" type="file" accept=".pdf,application/pdf" multiple>
+<div class="toolbar">
+<button onclick="loadPdfs()">Adicionar PDFs</button><button class="gray" onclick="selectAll()">Selecionar todas</button>
+<button class="gray" onclick="clearSel()">Desmarcar</button><button class="red" onclick="deleteSel()">Excluir selecionadas</button>
+<button class="gray" onclick="rotateSel()">Girar selecionadas</button><button class="gray" onclick="duplicateSel()">Duplicar selecionadas</button><button class="gray" onclick="undoOrg()">↶ Desfazer</button><button class="gray" onclick="redoOrg()">↷ Refazer</button><button class="gray" onclick="clearAllPdfs()">Limpar PDFs</button>
+<button onclick="saveOrg()">Salvar PDF organizado</button>
+</div>
+<div id="orgStatus" class="status"></div>
+<div class="history-bar"><span class="badge">Histórico</span><span id="historyInfo" class="tool-note">Nenhuma alteração</span></div>
+<div class="pdf-workspace">
+  <aside class="pdf-sidebar"><h3>PDFs carregados</h3><div id="pdfList" class="pdf-list"><div class="empty">Nenhum PDF carregado.</div></div></aside>
+  <div class="org-canvas"><div id="pages" class="pages"><div class="empty">Adicione um ou mais PDFs para começar.</div></div></div>
+</div>
+</div>
+<div class="grid">
+<div class="card"><h3>Juntar PDF</h3><p>Combine vários arquivos.</p><input id="merge" type="file" multiple accept=".pdf"><button class="action" onclick="send('/api/merge','merge',true)">Juntar PDF</button></div>
+<div class="card"><h3>Dividir / Extrair</h3><p>Ex.: 1,3,5-8.</p><input id="split" type="file" accept=".pdf"><input id="splitPages" placeholder="1,3,5-8"><button class="action" onclick="send('/api/split','split',{pages:'splitPages'})">Extrair</button></div>
+<div class="card"><h3>Remover páginas</h3><p>Remova intervalos.</p><input id="remove" type="file" accept=".pdf"><input id="removePages" placeholder="2,4,7-9"><button class="action" onclick="send('/api/remove-pages','remove',{pages:'removePages'})">Remover</button></div>
+<div class="card"><h3>Girar PDF</h3><p>Gire todas as páginas.</p><input id="rotate" type="file" accept=".pdf"><select id="degrees"><option>90</option><option>180</option><option>270</option></select><button class="action" onclick="send('/api/rotate','rotate',{degrees:'degrees'})">Girar</button></div>
+</div>
+</section>
+
+<section id="otimizar" class="panel">
+<div class="grid">
+<div class="card"><h3>Comprimir PDF</h3><p>Reduza o tamanho sem degradar o documento por padrão.</p><input id="compress" type="file" accept=".pdf"><select id="compressLevel"><option value="balanced">Equilibrada</option><option value="maximum">Máxima redução</option></select><button class="action" onclick="send('/api/compress','compress',{level:'compressLevel'})">Comprimir</button><div class="tool-note">Máxima redução pode rasterizar páginas e reduzir qualidade.</div></div>
+<div class="card"><h3>Reparar PDF</h3><p>Regrava a estrutura do PDF quando possível.</p><input id="repair" type="file" accept=".pdf"><button class="action" onclick="send('/api/repair','repair')">Reparar</button></div>
+<div class="card"><h3>OCR PDF</h3><p>Crie uma camada de texto pesquisável.</p><input id="ocr" type="file" accept=".pdf"><select id="ocrLang"><option value="por">Português</option><option value="eng">Inglês</option><option value="spa">Espanhol</option></select><button class="action" onclick="send('/api/ocr','ocr',{language:'ocrLang'})">Executar OCR</button></div>
+<div class="card"><h3>Digitalizar → PDF</h3><p>Monte um PDF a partir de várias imagens.</p><input id="scanImages" type="file" multiple accept="image/*"><label class="tool-note"><input id="scanOcr" type="checkbox"> Aplicar OCR se disponível</label><button class="action" onclick="send('/api/scan-to-pdf','scanImages',true,{run_ocr:'scanOcr'})">Gerar PDF</button></div>
+</div>
+</section>
+
+<section id="converter" class="panel">
+<div class="grid">
+<div class="card"><h3>JPG/PNG → PDF</h3><p>Converta imagens.</p><input id="img" type="file" multiple accept="image/*"><button class="action" onclick="send('/api/images-to-pdf','img',true)">Converter</button></div>
+<div class="card"><h3>PDF → JPG/PNG</h3><p>Exporta páginas em ZIP.</p><input id="pimg" type="file" accept=".pdf"><select id="fmt"><option value="png">PNG</option><option value="jpg">JPG</option></select><button class="action" onclick="send('/api/pdf-to-images','pimg',{fmt:'fmt'})">Converter</button></div>
+<div class="card"><h3>Word → PDF</h3><p>Requer LibreOffice.</p><input id="word" type="file" accept=".doc,.docx"><button class="action" onclick="send('/api/office-to-pdf','word')">Converter</button></div>
+<div class="card"><h3>Excel → PDF</h3><p>Requer LibreOffice.</p><input id="excel" type="file" accept=".xls,.xlsx"><button class="action" onclick="send('/api/office-to-pdf','excel')">Converter</button></div>
+<div class="card"><h3>PowerPoint → PDF</h3><p>Requer LibreOffice.</p><input id="ppt" type="file" accept=".ppt,.pptx"><button class="action" onclick="send('/api/office-to-pdf','ppt')">Converter</button></div>
+<div class="card"><h3>HTML → PDF</h3><p>Motor Chromium será integrado.</p><button class="action" onclick="info('HTML → PDF será habilitado com motor Chromium local.')">Abrir</button></div>
+<div class="card"><h3>PDF → Word/Excel/PPT</h3><p>Conversão editável requer motor específico.</p><button class="action" onclick="info('Conversão PDF → Office será adicionada no módulo de conversão avançada.')">Configurar</button></div>
+<div class="card"><h3>PDF → PDF/A</h3><p>Formato para arquivamento.</p><input id="pdfa" type="file" accept=".pdf"><button class="action" onclick="send('/api/pdf-a','pdfa')">Converter</button></div>
+</div>
+</section>
+
+<section id="editar" class="panel">
+<div class="grid">
+<div class="card"><h3>Inserir números</h3><p>Numeração sequencial.</p><input id="nums" type="file" accept=".pdf"><input id="start" type="number" value="1"><button class="action" onclick="send('/api/add-page-numbers','nums',{start:'start'})">Numerar</button></div>
+<div class="card"><h3>Marca d'água</h3><p>Texto sobre as páginas.</p><input id="wm" type="file" accept=".pdf"><input id="wmText" placeholder="CONFIDENCIAL"><button class="action" onclick="send('/api/watermark','wm',{text:'wmText'})">Adicionar</button></div>
+<div class="card"><h3>Recortar PDF</h3><p>Margem em pontos.</p><input id="crop" type="file" accept=".pdf"><input id="margin" type="number" value="20"><button class="action" onclick="send('/api/crop','crop',{margin:'margin'})">Recortar</button></div>
+<div class="card"><h3>Editar PDF</h3><p>Editor visual de texto, imagem e desenho.</p><button class="action" onclick="info('O editor visual é o próximo módulo.')">Abrir editor</button></div>
+<div class="card"><h3>Formulários PDF</h3><p>Campos preenchíveis.</p><button class="action" onclick="info('Editor de formulários será adicionado no módulo avançado.')">Abrir</button></div>
+</div>
+</section>
+
+<section id="seguranca" class="panel">
+<div class="grid">
+<div class="card"><h3>Proteger PDF</h3><p>Adicione senha.</p><input id="protect" type="file" accept=".pdf"><input id="pass" type="password" placeholder="Senha"><button class="action" onclick="send('/api/protect','protect',{password:'pass'})">Proteger</button></div>
+<div class="card"><h3>Desbloquear PDF</h3><p>Remova senha com a senha correta.</p><input id="unlock" type="file" accept=".pdf"><input id="upass" type="password" placeholder="Senha atual"><button class="action" onclick="send('/api/unlock','unlock',{password:'upass'})">Desbloquear</button></div>
+<div class="card"><h3>Assinar PDF</h3><p>Assinatura digital com certificado.</p><button class="action" onclick="info('Assinatura digital será implementada com suporte a certificado.')">Abrir</button></div>
+<div class="card"><h3>Ocultar informações</h3><p>Redaction permanente.</p><button class="action" onclick="info('Redaction será implementado no editor visual.')">Abrir</button></div>
+<div class="card"><h3>Comparar PDF</h3><p>Compare conteúdo entre versões.</p><button class="action" onclick="info('Comparação será implementada no módulo avançado.')">Abrir</button></div>
+</div>
+</section>
+</main>
+
+<script>
+function tab(id,b){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active')}
+function info(s){alert(s)}
+async function send(endpoint,id,fieldsOrMulti=false){
+ const input=document.getElementById(id);
+ if(!input.files.length){alert('Selecione um arquivo.');return}
+ const fd=new FormData();
+ const multi=fieldsOrMulti===true;
+ if(multi) for(const f of input.files) fd.append('files',f);
+ else fd.append('file',input.files[0]);
+ if(fieldsOrMulti && typeof fieldsOrMulti==='object'){
+   for(const [k,v] of Object.entries(fieldsOrMulti)) fd.append(k,document.getElementById(v).value);
+ }
+ try{
+   const r=await fetch(endpoint,{method:'POST',body:fd});
+   if(!r.ok){
+     let msg=await r.text();
+     try{msg=JSON.parse(msg).detail||msg}catch(_){}
+     throw new Error(msg);
+   }
+   const b=await r.blob();
+   const cd=r.headers.get('content-disposition')||'';
+   const m=cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+   const filename=m?decodeURIComponent(m[1]):'resultado.pdf';
+   const saved=await download(b,filename);
+   if(saved) alert('Arquivo salvo com sucesso: '+filename);
+ }catch(e){
+   alert('Não foi possível concluir a operação:\n'+(e.message||e));
+ }
+}
+async function download(blob,name){
+  try{
+    if(window.showSaveFilePicker){
+      const ext=(name.split('.').pop()||'bin').toLowerCase();
+      const types={
+        pdf:[{description:'Arquivo PDF',accept:{'application/pdf':['.pdf']}}],
+        zip:[{description:'Arquivo ZIP',accept:{'application/zip':['.zip']}}],
+        png:[{description:'Imagem PNG',accept:{'image/png':['.png']}}],
+        jpg:[{description:'Imagem JPG',accept:{'image/jpeg':['.jpg','.jpeg']}}]
+      };
+      const handle=await window.showSaveFilePicker({suggestedName:name,types:types[ext]||undefined});
+      const writable=await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    }
+  }catch(e){
+    if(e && e.name==='AbortError') return false;
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=name;
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  return true;
+}
+
+let items=[],orgFiles=[],orgDocs=[],history=[],future=[];
+
+async function addPdfFiles(files){
+  const dt=new DataTransfer();
+  const current=[...document.getElementById('orgFile').files];
+  [...current,...files].forEach(f=>dt.items.add(f));
+  document.getElementById('orgFile').files=dt.files;
+  await loadPdfs();
+}
+async function loadPdfs(){
+ const inp=document.getElementById('orgFile');
+ if(!inp.files.length){alert('Selecione um ou mais PDFs.');return}
+ const incoming=[...inp.files];
+ const existingNames=new Set(orgFiles.map(f=>f.name+'|'+f.size+'|'+f.lastModified));
+ const newFiles=incoming.filter(f=>!existingNames.has(f.name+'|'+f.size+'|'+f.lastModified));
+ if(!newFiles.length){statusOrg('Nenhum PDF novo foi adicionado.');inp.value='';return}
+ const baseIndex=orgFiles.length;
+ for(let offset=0;offset<newFiles.length;offset++){
+   const file=newFiles[offset];
+   if(file.type!=='application/pdf'&&!file.name.toLowerCase().endsWith('.pdf'))continue;
+   const data=await file.arrayBuffer();
+   const pdf=await pdfjsLib.getDocument({data}).promise, fileIndex=baseIndex+offset;
+   orgFiles.push(file);orgDocs.push(pdf);
+   for(let page=1;page<=pdf.numPages;page++)items.push({id:crypto.randomUUID(),fileIndex,page,rot:0});
+ }
+ renderPdfList();await renderPages();
+ orgUndo=[snapshotOrg()];orgRedo=[];updateHistoryInfo();
+ statusOrg(orgFiles.length+' PDF(s) carregado(s), '+items.length+' páginas disponíveis para organizar.');
+ inp.value='';
+}
+
+function renderPdfList(){
+ const list=document.getElementById('pdfList');list.innerHTML='';
+ if(!orgFiles.length){list.innerHTML='<div class="empty">Nenhum PDF carregado.</div>';return}
+ orgFiles.forEach((file,i)=>{
+   const count=items.filter(x=>x.fileIndex===i).length,el=document.createElement('div');
+   el.className='pdf-item'+(i===0?' active':'');el.dataset.fileIndex=i;
+   el.innerHTML='<span>📄</span><span class="pdf-name" title="'+escapeHtml(file.name)+'">'+escapeHtml(file.name)+'</span><span class="pdf-count">'+count+' pág.</span><button class="pdf-remove" title="Remover PDF" onclick="removePdf(event,'+i+')">×</button>';
+   el.onclick=()=>highlightPdf(i);list.appendChild(el);
+ });
+}
+function highlightPdf(index){
+ document.querySelectorAll('.pdf-item').forEach(x=>x.classList.toggle('active',Number(x.dataset.fileIndex)===index));
+ const first=document.querySelector('.page[data-file-index="'+index+'"]');
+ if(first)first.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function removePdf(event,index){
+ event.stopPropagation();const pageCount=items.filter(x=>x.fileIndex===index).length;
+ if(!confirm('Remover "'+orgFiles[index].name+'" e suas '+pageCount+' páginas do organizador?'))return;
+ orgFiles.splice(index,1);orgDocs.splice(index,1);
+ items=items.filter(x=>x.fileIndex!==index).map(x=>({...x,fileIndex:x.fileIndex>index?x.fileIndex-1:x.fileIndex}));
+ renderPdfList();renderPages();statusOrg(orgFiles.length+' PDF(s) restante(s).');
+}
+function clearAllPdfs(){
+ if(!orgFiles.length)return;
+ if(!confirm('Limpar todos os PDFs e a organização atual?'))return;
+ orgFiles=[];orgDocs=[];items=[];renderPdfList();renderPages();statusOrg('Organizador limpo.');
+}
+async function renderPages(){
+ const c=document.getElementById('pages');c.innerHTML='';
+ if(!items.length){c.innerHTML='<div class="empty">Adicione um ou mais PDFs para começar.</div>';return}
+ for(const item of items){
+   const el=document.createElement('div');el.className='page';el.draggable=true;el.dataset.id=item.id;el.dataset.fileIndex=item.fileIndex;
+   const can=document.createElement('canvas'),pdf=orgDocs[item.fileIndex],p=await pdf.getPage(item.page),vp=p.getViewport({scale:0.28});
+   can.width=vp.width;can.height=vp.height;await p.render({canvasContext:can.getContext('2d'),viewport:vp}).promise;can.style.transform='rotate('+item.rot+'deg)';
+   const n=document.createElement('div');n.className='num';n.textContent='Página '+item.page;
+   const src=document.createElement('div');src.className='source';src.textContent=orgFiles[item.fileIndex]?.name||'PDF';
+   el.append(can,n,src);el.onclick=()=>el.classList.toggle('selected');
+   el.ondragstart=()=>el.classList.add('dragging');el.ondragend=()=>{el.classList.remove('dragging');syncOrder()};
+   el.ondragover=e=>e.preventDefault();el.ondrop=e=>{e.preventDefault();const d=document.querySelector('.dragging');if(d&&d!==el){const rect=el.getBoundingClientRect();c.insertBefore(d,e.clientY<rect.top+rect.height/2?el:el.nextSibling);syncOrder()}};
+   c.appendChild(el);
+ }
+}
+function syncOrder(){const map=new Map(items.map(x=>[x.id,x]));items=[...document.querySelectorAll('.page')].map(x=>map.get(x.dataset.id)).filter(Boolean)}
+function statusOrg(s){const x=document.getElementById('orgStatus');x.style.display='block';x.textContent=s}
+function selectAll(){document.querySelectorAll('.page').forEach(x=>x.classList.add('selected'))}
+function clearSel(){document.querySelectorAll('.page').forEach(x=>x.classList.remove('selected'))}
+function deleteSel(){
+ syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;
+ items=items.filter(x=>!ids.has(x.id));renderPdfList();renderPages();statusOrg(ids.size+' página(s) removida(s).');
+}
+function rotateSel(){
+ syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));
+ items.forEach(x=>{if(ids.has(x.id))x.rot=(x.rot+90)%360});renderPages();
+}
+function duplicateSel(){
+ syncOrder();
+ const selected=[...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id);
+ if(!selected.length){alert('Selecione pelo menos uma página.');return}
+ const byId=new Map(items.map(x=>[x.id,x]));
+ const copies=[];
+ selected.forEach(id=>{
+   const item=byId.get(id);
+   if(item) copies.push({...item,id:crypto.randomUUID()});
+ });
+ const selectedSet=new Set(selected);
+ const result=[];
+ for(const item of items){
+   result.push(item);
+   if(selectedSet.has(item.id)){
+     const copy=copies.shift();
+     if(copy) result.push(copy);
+   }
+ }
+ items=result;
+ clearSel();
+ renderPdfList();
+ renderPages();
+ statusOrg(copies.length+' página(s) duplicada(s).');
+}
+async function saveOrg(){
+ if(!orgFiles.length||!items.length){alert('Adicione pelo menos um PDF.');return}
+ syncOrder();const fd=new FormData();orgFiles.forEach(f=>fd.append('files',f));
+ fd.append('order',JSON.stringify(items.map(x=>({fileIndex:x.fileIndex,page:x.page}))));
+ fd.append('rotations',JSON.stringify(items.filter(x=>x.rot).map(x=>({fileIndex:x.fileIndex,page:x.page,rotation:x.rot}))));
+ try{
+   statusOrg('Gerando PDF final com '+items.length+' páginas...');
+   const r=await fetch('/api/organize-multi',{method:'POST',body:fd});
+   if(!r.ok){let msg=await r.text();try{msg=JSON.parse(msg).detail||msg}catch(_){}throw new Error(msg)}
+   const blob=await r.blob(),saved=await download(blob,'pdf_organizado.pdf');
+   if(saved)statusOrg('PDF organizado salvo com sucesso.');
+ }catch(e){statusOrg('Erro ao salvar: '+(e.message||e));alert('Não foi possível salvar o PDF organizado:\n'+(e.message||e))}
+}
+
+async function loadCapabilities(){
+  const el=document.getElementById('capabilities');
+  try{
+    const r=await fetch('/api/system/capabilities');
+    const c=await r.json();
+    const yes=k=>c[k]?'OK':'não instalado';
+    el.textContent='Recursos: LibreOffice '+yes('libreoffice')+
+      ' · OCRmyPDF '+yes('ocrmypdf')+
+      ' · Tesseract '+yes('tesseract')+
+      ' · Ghostscript '+yes('ghostscript');
+  }catch(e){el.textContent='Não foi possível verificar os recursos do sistema.'}
+}
+loadCapabilities();
+</script>
+
+<script>
+document.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files'))e.preventDefault()});
+document.addEventListener('drop',async e=>{
+  if(![...e.dataTransfer.types].includes('Files'))return;
+  e.preventDefault();
+  const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+  if(files.length){
+    document.getElementById('orgFile').files;
+    await addPdfFiles(files);
+  }
+});
+</script>
+<script type="module">
+import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+window.pdfjsLib=pdfjsLib;
+</script>
+</body></html>
