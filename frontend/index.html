@@ -9,20 +9,16 @@
 </style>
 </head>
 <body>
-<header>
-<img class="brand-logo" src="/assets/olivex_topografia.png" alt="OLIVEX">
-<div class="brand-title"><h1>PDF OLIVEX</h1><p>Processamento local de PDFs: organize, converta, otimize, edite e proteja seus documentos.</p></div>
-</header>
+<header><img class="brand-logo" src="/assets/olivex_topografia.png" alt="OLIVEX"><div class="brand-title"><h1>PDF OLIVEX</h1><p>Processamento local de PDFs: organize, converta, otimize, edite e proteja seus documentos.</p></div></header>
 <main>
 <div id="capabilities" class="status" style="display:block;margin-bottom:14px">Verificando recursos disponíveis...</div>
 <div class="tabs" role="tablist">
-<button type="button" class="tab active" data-tab="organizar" onclick="switchTab('organizar',this)">Organizar PDF</button>
-<button type="button" class="tab" data-tab="otimizar" onclick="switchTab('otimizar',this)">Otimizar PDF</button>
-<button type="button" class="tab" data-tab="converter" onclick="switchTab('converter',this)">Converter</button>
-<button type="button" class="tab" data-tab="editar" onclick="switchTab('editar',this)">Editar PDF</button>
-<button type="button" class="tab" data-tab="seguranca" onclick="switchTab('seguranca',this)">Segurança</button>
+<button type="button" class="tab active" data-tab="organizar" aria-selected="true" onclick="switchTab('organizar',this)">Organizar PDF</button>
+<button type="button" class="tab" data-tab="otimizar" aria-selected="false" onclick="switchTab('otimizar',this)">Otimizar PDF</button>
+<button type="button" class="tab" data-tab="converter" aria-selected="false" onclick="switchTab('converter',this)">Converter</button>
+<button type="button" class="tab" data-tab="editar" aria-selected="false" onclick="switchTab('editar',this)">Editar PDF</button>
+<button type="button" class="tab" data-tab="seguranca" aria-selected="false" onclick="switchTab('seguranca',this)">Segurança</button>
 </div>
-
 <section id="organizar" class="panel active">
 <div class="section"><h2>Organizar páginas visualmente</h2><p>Adicione PDFs, visualize as páginas e organize a ordem final.</p><input id="orgFile" type="file" accept=".pdf,application/pdf" multiple><div class="toolbar"><button type="button" onclick="loadPdfs()">Adicionar PDFs</button><button type="button" class="gray" onclick="selectAll()">Selecionar todas</button><button type="button" class="gray" onclick="clearSel()">Desmarcar</button><button type="button" class="red" onclick="deleteSel()">Excluir selecionadas</button><button type="button" class="gray" onclick="rotateSel()">Girar selecionadas</button><button type="button" class="gray" onclick="duplicateSel()">Duplicar selecionadas</button><button type="button" class="gray" onclick="undoOrg()">↶ Desfazer</button><button type="button" class="gray" onclick="redoOrg()">↷ Refazer</button><button type="button" class="gray" onclick="clearAllPdfs()">Limpar PDFs</button><button type="button" onclick="saveOrg()">Salvar PDF organizado</button></div><div id="orgStatus" class="status"></div><div class="history-bar"><span class="badge">Histórico</span><span id="historyInfo" class="tool-note">Nenhuma alteração</span></div><div class="pdf-workspace"><aside class="pdf-sidebar"><h3>PDFs carregados</h3><div id="pdfList" class="pdf-list"><div class="empty">Nenhum PDF carregado.</div></div></aside><div class="org-canvas"><div id="pages" class="pages"><div class="empty">Adicione um ou mais PDFs para começar.</div></div></div></div></div>
 <div class="grid">
@@ -31,14 +27,12 @@
 <div class="card"><h3>Remover páginas</h3><p>Remova intervalos.</p><input id="remove" type="file" accept=".pdf"><input id="removePages" placeholder="2,4,7-9"><button class="action" onclick="send('/api/remove-pages','remove',{pages:'removePages'})">Remover</button></div>
 <div class="card"><h3>Girar PDF</h3><p>Gire todas as páginas.</p><input id="rotate" type="file" accept=".pdf"><select id="degrees"><option value="90">90</option><option value="180">180</option><option value="270">270</option></select><button class="action" onclick="send('/api/rotate','rotate',{degrees:'degrees'})">Girar</button></div>
 </div></section>
-
 <section id="otimizar" class="panel"><div class="grid">
 <div class="card"><h3>Comprimir PDF</h3><p>Reduza o tamanho do arquivo.</p><input id="compress" type="file" accept=".pdf"><select id="compressLevel"><option value="balanced">Equilibrada</option><option value="maximum">Máxima redução</option></select><button class="action" onclick="send('/api/compress','compress',{level:'compressLevel'})">Comprimir</button></div>
 <div class="card"><h3>Reparar PDF</h3><p>Regrava a estrutura quando possível.</p><input id="repair" type="file" accept=".pdf"><button class="action" onclick="send('/api/repair','repair')">Reparar</button></div>
 <div class="card"><h3>OCR PDF</h3><p>Crie texto pesquisável.</p><input id="ocr" type="file" accept=".pdf"><select id="ocrLang"><option value="por">Português</option><option value="eng">Inglês</option><option value="spa">Espanhol</option></select><button class="action" onclick="send('/api/ocr','ocr',{language:'ocrLang'})">Executar OCR</button></div>
 <div class="card"><h3>Digitalizar → PDF</h3><p>Monte PDF a partir de imagens.</p><input id="scanImages" type="file" multiple accept="image/*"><label class="tool-note"><input id="scanOcr" type="checkbox"> Aplicar OCR se disponível</label><button class="action" onclick="send('/api/scan-to-pdf','scanImages',{multi:true,run_ocr:'scanOcr'})">Gerar PDF</button></div>
 </div></section>
-
 <section id="converter" class="panel"><div class="grid">
 <div class="card"><h3>JPG/PNG → PDF</h3><p>Converta imagens.</p><input id="img" type="file" multiple accept="image/*"><button class="action" onclick="send('/api/images-to-pdf','img',{multi:true})">Converter</button></div>
 <div class="card"><h3>PDF → JPG/PNG</h3><p>Exporta páginas em ZIP.</p><input id="pimg" type="file" accept=".pdf"><select id="fmt"><option value="png">PNG</option><option value="jpg">JPG</option></select><button class="action" onclick="send('/api/pdf-to-images','pimg',{fmt:'fmt'})">Converter</button></div>
@@ -49,7 +43,6 @@
 <div class="card"><h3>PDF → Word/Excel/PPT</h3><p>Conversão editável requer motor específico.</p><button class="action" onclick="info('Conversão PDF → Office será adicionada no módulo avançado.')">Configurar</button></div>
 <div class="card"><h3>PDF → PDF/A</h3><p>Formato para arquivamento.</p><input id="pdfa" type="file" accept=".pdf"><button class="action" onclick="send('/api/pdf-a','pdfa')">Converter</button></div>
 </div></section>
-
 <section id="editar" class="panel"><div class="grid">
 <div class="card"><h3>Inserir números</h3><p>Numeração sequencial.</p><input id="nums" type="file" accept=".pdf"><input id="start" type="number" value="1"><button class="action" onclick="send('/api/add-page-numbers','nums',{start:'start'})">Numerar</button></div>
 <div class="card"><h3>Marca d'água</h3><p>Texto sobre as páginas.</p><input id="wm" type="file" accept=".pdf"><input id="wmText" placeholder="CONFIDENCIAL"><button class="action" onclick="send('/api/watermark','wm',{text:'wmText'})">Adicionar</button></div>
@@ -57,7 +50,6 @@
 <div class="card"><h3>Editar PDF</h3><p>Editor visual de texto, imagem e desenho.</p><button class="action" onclick="info('O editor visual é o próximo módulo.')">Abrir editor</button></div>
 <div class="card"><h3>Formulários PDF</h3><p>Campos preenchíveis.</p><button class="action" onclick="info('Editor de formulários será adicionado no módulo avançado.')">Abrir</button></div>
 </div></section>
-
 <section id="seguranca" class="panel"><div class="grid">
 <div class="card"><h3>Proteger PDF</h3><p>Adicione senha.</p><input id="protect" type="file" accept=".pdf"><input id="pass" type="password" placeholder="Senha"><button class="action" onclick="send('/api/protect','protect',{password:'pass'})">Proteger</button></div>
 <div class="card"><h3>Desbloquear PDF</h3><p>Remova senha com a senha correta.</p><input id="unlock" type="file" accept=".pdf"><input id="upass" type="password" placeholder="Senha atual"><button class="action" onclick="send('/api/unlock','unlock',{password:'upass'})">Desbloquear</button></div>
@@ -66,82 +58,40 @@
 <div class="card"><h3>Comparar PDF</h3><p>Compare conteúdo entre versões.</p><button class="action" onclick="info('Comparação será implementada no módulo avançado.')">Abrir</button></div>
 </div></section>
 </main>
-
 <script>
 'use strict';
-function switchTab(id,button){
-  const target=document.getElementById(id);
-  if(!target)return;
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-selected','false')});
-  target.classList.add('active');
-  if(button){button.classList.add('active');button.setAttribute('aria-selected','true')}
-}
+function switchTab(id,button){const target=document.getElementById(id);if(!target)return;document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-selected','false')});target.classList.add('active');if(button){button.classList.add('active');button.setAttribute('aria-selected','true')}}
 function tab(id,button){switchTab(id,button)}
 function info(message){alert(message)}
-
-async function send(endpoint,id,options={}){
-  const input=document.getElementById(id);
-  if(!input || !input.files || !input.files.length){alert('Selecione um arquivo.');return}
-  const fd=new FormData();
-  if(options.multi){for(const f of input.files)fd.append('files',f)}else{fd.append('file',input.files[0])}
-  for(const [key,value] of Object.entries(options)){
-    if(key==='multi')continue;
-    const el=document.getElementById(value);
-    fd.append(key,el ? (el.type==='checkbox' ? String(el.checked) : el.value) : value);
-  }
-  try{
-    const response=await fetch(endpoint,{method:'POST',body:fd});
-    if(!response.ok){let msg=await response.text();try{msg=JSON.parse(msg).detail||msg}catch(_){}throw new Error(msg||('HTTP '+response.status))}
-    const blob=await response.blob();
-    const cd=response.headers.get('content-disposition')||'';
-    const match=cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-    const filename=match?decodeURIComponent(match[1]):'resultado.pdf';
-    await download(blob,filename);
-  }catch(error){alert('Não foi possível concluir a operação:\n'+(error.message||error))}
-}
-async function download(blob,name){
-  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)
-}
-
+async function send(endpoint,id,options={}){const input=document.getElementById(id);if(!input||!input.files||!input.files.length){alert('Selecione um arquivo.');return}const fd=new FormData();if(options.multi){for(const f of input.files)fd.append('files',f)}else fd.append('file',input.files[0]);for(const [key,value] of Object.entries(options)){if(key==='multi')continue;const el=document.getElementById(value);fd.append(key,el?(el.type==='checkbox'?String(el.checked):el.value):value)}try{const response=await fetch(endpoint,{method:'POST',body:fd});if(!response.ok){let msg=await response.text();try{msg=JSON.parse(msg).detail||msg}catch(_){}throw new Error(msg||('HTTP '+response.status))}const blob=await response.blob();const cd=response.headers.get('content-disposition')||'';const match=cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);const filename=match?decodeURIComponent(match[1]):'resultado.pdf';await download(blob,filename)}catch(error){alert('Não foi possível concluir a operação:\n'+(error.message||error))}}
+async function download(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 let items=[],orgFiles=[],orgDocs=[],orgUndo=[],orgRedo=[];
-function snapshotOrg(){return JSON.stringify(items.map(x=>({...x})))}
-function restoreOrg(snapshot){items=JSON.parse(snapshot);renderPdfList();renderPages()}
-function recordOrg(){const snap=snapshotOrg();if(!orgUndo.length||orgUndo[orgUndo.length-1]!==snap)orgUndo.push(snap);orgRedo=[];updateHistoryInfo()}
-function updateHistoryInfo(){const el=document.getElementById('historyInfo');if(el)el.textContent=orgUndo.length>1?`${orgUndo.length-1} alteração(ões) registrada(s)`: 'Nenhuma alteração'}
-function undoOrg(){if(orgUndo.length<=1)return;orgRedo.push(orgUndo.pop());restoreOrg(orgUndo[orgUndo.length-1]);updateHistoryInfo()}
-function redoOrg(){if(!orgRedo.length)return;const snap=orgRedo.pop();orgUndo.push(snap);restoreOrg(snap);updateHistoryInfo()}
-async function addPdfFiles(files){
-  const valid=[...files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
-  if(!valid.length)return;
-  const input=document.getElementById('orgFile');const dt=new DataTransfer();[...input.files,...valid].forEach(f=>dt.items.add(f));input.files=dt.files;await loadPdfs()
-}
-async function loadPdfs(){
-  const input=document.getElementById('orgFile');if(!input.files.length){alert('Selecione um ou mais PDFs.');return}
-  if(!window.pdfjsLib){alert('O visualizador PDF ainda está carregando. Aguarde alguns segundos e tente novamente.');return}
-  const existing=new Set(orgFiles.map(f=>f.name+'|'+f.size+'|'+f.lastModified));const newFiles=[...input.files].filter(f=>!existing.has(f.name+'|'+f.size+'|'+f.lastModified));
-  if(!newFiles.length){statusOrg('Nenhum PDF novo foi adicionado.');input.value='';return}
-  for(const file of newFiles){const data=await file.arrayBuffer();const pdf=await window.pdfjsLib.getDocument({data}).promise;const fileIndex=orgFiles.length;orgFiles.push(file);orgDocs.push(pdf);for(let page=1;page<=pdf.numPages;page++)items.push({id:crypto.randomUUID(),fileIndex,page,rot:0})}
-  renderPdfList();await renderPages();recordOrg();statusOrg(orgFiles.length+' PDF(s) carregado(s), '+items.length+' páginas disponíveis.');input.value=''
-}
+function cloneItems(){return items.map(x=>({...x}))}
+function snapshotOrg(){return {items:cloneItems(),files:orgFiles.slice(),docs:orgDocs.slice()}}
+function restoreOrg(state){items=state.items.map(x=>({...x}));orgFiles=state.files.slice();orgDocs=state.docs.slice();renderPdfList();renderPages()}
+function recordOrg(){const snap=snapshotOrg();orgUndo.push(snap);if(orgUndo.length>30)orgUndo.shift();orgRedo=[];updateHistoryInfo()}
+function updateHistoryInfo(){const el=document.getElementById('historyInfo');if(el)el.textContent=orgUndo.length>1?`${orgUndo.length-1} alteração(ões) registrada(s)`:'Nenhuma alteração'}
+function undoOrg(){if(orgUndo.length<=1)return;const current=orgUndo.pop();orgRedo.push(current);restoreOrg(orgUndo[orgUndo.length-1]);updateHistoryInfo()}
+function redoOrg(){if(!orgRedo.length)return;const next=orgRedo.pop();orgUndo.push(next);restoreOrg(next);updateHistoryInfo()}
+async function addPdfFiles(files){const valid=[...files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));if(!valid.length)return;const input=document.getElementById('orgFile');const dt=new DataTransfer();[...input.files,...valid].forEach(f=>dt.items.add(f));input.files=dt.files;await loadPdfs()}
+async function loadPdfs(){const input=document.getElementById('orgFile');if(!input.files.length){alert('Selecione um ou mais PDFs.');return}if(!window.pdfjsLib){alert('O visualizador PDF ainda está carregando. Aguarde alguns segundos e tente novamente.');return}const existing=new Set(orgFiles.map(f=>f.name+'|'+f.size+'|'+f.lastModified));const newFiles=[...input.files].filter(f=>!existing.has(f.name+'|'+f.size+'|'+f.lastModified));if(!newFiles.length){statusOrg('Nenhum PDF novo foi adicionado.');input.value='';return}try{for(const file of newFiles){const data=await file.arrayBuffer();const pdf=await window.pdfjsLib.getDocument({data}).promise;const fileIndex=orgFiles.length;orgFiles.push(file);orgDocs.push(pdf);for(let page=1;page<=pdf.numPages;page++)items.push({id:crypto.randomUUID(),fileIndex,page,rot:0})}renderPdfList();await renderPages();recordOrg();statusOrg(orgFiles.length+' PDF(s) carregado(s), '+items.length+' páginas disponíveis.')}catch(error){statusOrg('Erro ao carregar PDF: '+(error.message||error));alert('Não foi possível carregar o PDF:\n'+(error.message||error))}finally{input.value=''}}
 function renderPdfList(){const list=document.getElementById('pdfList');list.innerHTML='';if(!orgFiles.length){list.innerHTML='<div class="empty">Nenhum PDF carregado.</div>';return}orgFiles.forEach((file,index)=>{const count=items.filter(x=>x.fileIndex===index).length;const el=document.createElement('div');el.className='pdf-item'+(index===0?' active':'');el.dataset.fileIndex=index;el.innerHTML='<span>PDF</span><span class="pdf-name">'+escapeHtml(file.name)+'</span><span class="pdf-count">'+count+' pág.</span><button class="pdf-remove" type="button">×</button>';el.onclick=()=>highlightPdf(index);el.querySelector('.pdf-remove').onclick=e=>removePdf(e,index);list.appendChild(el)})}
 function highlightPdf(index){document.querySelectorAll('.pdf-item').forEach(x=>x.classList.toggle('active',Number(x.dataset.fileIndex)===index));const first=document.querySelector('.page[data-file-index="'+index+'"]');if(first)first.scrollIntoView({behavior:'smooth',block:'center'})}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function removePdf(event,index){event.stopPropagation();if(!orgFiles[index])return;if(!confirm('Remover este PDF e suas páginas?'))return;orgFiles.splice(index,1);orgDocs.splice(index,1);items=items.filter(x=>x.fileIndex!==index).map(x=>({...x,fileIndex:x.fileIndex>index?x.fileIndex-1:x.fileIndex}));renderPdfList();renderPages();recordOrg();statusOrg('PDF removido.')}
-function clearAllPdfs(){if(!orgFiles.length)return;if(!confirm('Limpar todos os PDFs?'))return;orgFiles=[];orgDocs=[];items=[];renderPdfList();renderPages();recordOrg();statusOrg('Organizador limpo.')}
+function removePdf(event,index){event.stopPropagation();if(!orgFiles[index])return;if(!confirm('Remover este PDF e suas páginas?'))return;recordOrg();orgFiles.splice(index,1);orgDocs.splice(index,1);items=items.filter(x=>x.fileIndex!==index).map(x=>({...x,fileIndex:x.fileIndex>index?x.fileIndex-1:x.fileIndex}));renderPdfList();renderPages();recordOrg();statusOrg('PDF removido.')}
+function clearAllPdfs(){if(!orgFiles.length)return;if(!confirm('Limpar todos os PDFs?'))return;recordOrg();orgFiles=[];orgDocs=[];items=[];renderPdfList();renderPages();recordOrg();statusOrg('Organizador limpo.')}
 async function renderPages(){const container=document.getElementById('pages');container.innerHTML='';if(!items.length){container.innerHTML='<div class="empty">Adicione um ou mais PDFs para começar.</div>';return}for(const item of items){const el=document.createElement('div');el.className='page';el.draggable=true;el.dataset.id=item.id;el.dataset.fileIndex=item.fileIndex;const canvas=document.createElement('canvas');const pdf=orgDocs[item.fileIndex];if(!pdf)continue;const page=await pdf.getPage(item.page);const viewport=page.getViewport({scale:.28});canvas.width=viewport.width;canvas.height=viewport.height;await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;canvas.style.transform='rotate('+item.rot+'deg)';const num=document.createElement('div');num.className='num';num.textContent='Página '+item.page;const src=document.createElement('div');src.className='source';src.textContent=orgFiles[item.fileIndex]?.name||'PDF';el.append(canvas,num,src);el.onclick=()=>el.classList.toggle('selected');el.ondragstart=()=>el.classList.add('dragging');el.ondragend=()=>{el.classList.remove('dragging');syncOrder();recordOrg()};el.ondragover=e=>e.preventDefault();el.ondrop=e=>{e.preventDefault();const drag=document.querySelector('.dragging');if(drag&&drag!==el){const rect=el.getBoundingClientRect();container.insertBefore(drag,e.clientY<rect.top+rect.height/2?el:el.nextSibling);syncOrder();recordOrg()}};container.appendChild(el)}}
 function syncOrder(){const map=new Map(items.map(x=>[x.id,x]));items=[...document.querySelectorAll('.page')].map(x=>map.get(x.dataset.id)).filter(Boolean)}
 function statusOrg(text){const el=document.getElementById('orgStatus');el.style.display='block';el.textContent=text}
 function selectAll(){document.querySelectorAll('.page').forEach(x=>x.classList.add('selected'))}
 function clearSel(){document.querySelectorAll('.page').forEach(x=>x.classList.remove('selected'))}
-function deleteSel(){syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;items=items.filter(x=>!ids.has(x.id));renderPdfList();renderPages();recordOrg();statusOrg(ids.size+' página(s) removida(s).')}
-function rotateSel(){syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;items.forEach(x=>{if(ids.has(x.id))x.rot=(x.rot+90)%360});renderPages();recordOrg();statusOrg('Página(s) girada(s).')}
-function duplicateSel(){syncOrder();const selected=[...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id);if(!selected.length){alert('Selecione pelo menos uma página.');return}const set=new Set(selected);const result=[];for(const item of items){result.push(item);if(set.has(item.id))result.push({...item,id:crypto.randomUUID()})}items=result;clearSel();renderPdfList();renderPages();recordOrg();statusOrg('Página(s) duplicada(s).')}
+function deleteSel(){syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;recordOrg();items=items.filter(x=>!ids.has(x.id));renderPdfList();renderPages();recordOrg();statusOrg(ids.size+' página(s) removida(s).')}
+function rotateSel(){syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;recordOrg();items.forEach(x=>{if(ids.has(x.id))x.rot=(x.rot+90)%360});renderPages();recordOrg();statusOrg('Página(s) girada(s).')}
+function duplicateSel(){syncOrder();const selected=[...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id);if(!selected.length){alert('Selecione pelo menos uma página.');return}recordOrg();const set=new Set(selected);const result=[];for(const item of items){result.push(item);if(set.has(item.id))result.push({...item,id:crypto.randomUUID()})}items=result;clearSel();renderPdfList();renderPages();recordOrg();statusOrg('Página(s) duplicada(s).')}
 async function saveOrg(){if(!orgFiles.length||!items.length){alert('Adicione pelo menos um PDF.');return}syncOrder();const fd=new FormData();orgFiles.forEach(f=>fd.append('files',f));fd.append('order',JSON.stringify(items.map(x=>({fileIndex:x.fileIndex,page:x.page}))));fd.append('rotations',JSON.stringify(items.filter(x=>x.rot).map(x=>({fileIndex:x.fileIndex,page:x.page,rotation:x.rot}))));try{statusOrg('Gerando PDF final...');const r=await fetch('/api/organize-multi',{method:'POST',body:fd});if(!r.ok)throw new Error(await r.text());await download(await r.blob(),'pdf_organizado.pdf');statusOrg('PDF organizado salvo com sucesso.')}catch(e){statusOrg('Erro ao salvar: '+e.message);alert('Não foi possível salvar o PDF organizado:\n'+e.message)}}
-async function loadCapabilities(){const el=document.getElementById('capabilities');try{const r=await fetch('/api/system/capabilities');if(!r.ok)throw new Error();const c=await r.json();const yes=k=>c[k]?'OK':'não instalado';el.textContent='Recursos: LibreOffice '+yes('libreoffice')+' · OCRmyPDF '+yes('ocrmypdf')+' · Tesseract '+yes('tesseract')+' · Ghostscript '+yes('ghostscript')}catch(e){el.textContent='Não foi possível verificar os recursos do sistema.'}}
-
-document.addEventListener('DOMContentLoaded',()=>{switchTab('organizar',document.querySelector('.tab[data-tab="organizar"]'));loadCapabilities()});
-document.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files'))e.preventDefault()});document.addEventListener('drop',async e=>{if(![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));if(files.length)await addPdfFiles(files)});
+async function loadCapabilities(){const el=document.getElementById('capabilities');try{const r=await fetch('/api/system/capabilities');if(!r.ok)throw new Error('HTTP '+r.status);const c=await r.json();const yes=k=>c[k]?'OK':'não instalado';el.textContent='Recursos: LibreOffice '+yes('libreoffice')+' · OCRmyPDF '+yes('ocrmypdf')+' · Tesseract '+yes('tesseract')+' · Ghostscript '+yes('ghostscript')}catch(e){el.textContent='Não foi possível verificar os recursos do sistema.'}}
+document.addEventListener('DOMContentLoaded',()=>{const first=document.querySelector('.tab[data-tab="organizar"]');switchTab('organizar',first);recordOrg();loadCapabilities()});
+document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});document.addEventListener('drop',async e=>{if(!e.dataTransfer||![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));if(files.length)await addPdfFiles(files)});
 </script>
 <script type="module">
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
