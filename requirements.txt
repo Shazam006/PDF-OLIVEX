@@ -4,3 +4,4 @@ python-multipart>=0.0.20,<1
 pypdf>=5,<7
 PyMuPDF>=1.25,<2
 img2pdf>=0.6,<1
+ocrmypdf>=16,<18
