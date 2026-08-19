@@ -1,0 +1,17 @@
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+work
+*.pdf
+*.zip
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
