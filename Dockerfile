@@ -9,6 +9,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        libreoffice \
+       qpdf \
        tesseract-ocr \
        tesseract-ocr-por \
        tesseract-ocr-eng \
