@@ -26,6 +26,14 @@ jobs:
           s = s.replace('<p>OCR local no navegador.</p><input id="ocr" type="file" accept=".pdf"><select id="ocrLang"><option value="por">Português</option><option value="eng">Inglês</option><option value="spa">Espanhol</option></select><button class="action" onclick="ocrPdf()">Executar OCR</button>', '<p>OCR avançado exige processamento adicional e não está habilitado no GitHub Pages.</p><button class="action" onclick="info(\'OCR será habilitado quando o backend estiver hospedado.\')">Ver status</button>')
           s = s.replace("async function ocrPdf(){const f=getFile('ocr');if(!f)return;alert('O OCR local continua disponível, mas pode exigir bastante memória em PDFs grandes.');}", "async function ocrPdf(){info('OCR não está disponível nesta versão estática do GitHub Pages.');}")
 
+          old_images = "async function imagesToPdf(id,name){const input=document.getElementById(id);if(!input.files.length){alert('Selecione as imagens.');return}try{const out=await PDFDocument.create();for(const f of input.files){const bytes=new Uint8Array(await f.arrayBuffer()),image=f.type==='image/png'?await out.embedPng(bytes):await out.embedJpg(bytes),page=out.addPage([image.width,image.height]);page.drawImage(image,{x:0,y:0,width:image.width,height:image.height})}saveBlob(await out.save({useObjectStreams:true}),name)}catch(e){alert('Falha na conversão: '+e.message)}}"
+          new_images = "async function imagesToPdf(id,name){const input=document.getElementById(id);if(!input.files.length){alert('Selecione as imagens.');return}try{const out=await PDFDocument.create();for(const f of input.files){if(f.type!=='image/png'&&f.type!=='image/jpeg')throw Error('Formato não suportado. Use PNG ou JPEG.');const bytes=new Uint8Array(await f.arrayBuffer()),image=f.type==='image/png'?await out.embedPng(bytes):await out.embedJpg(bytes),page=out.addPage([image.width,image.height]);page.drawImage(image,{x:0,y:0,width:image.width,height:image.height})}saveBlob(await out.save({useObjectStreams:true}),name)}catch(e){alert('Falha na conversão: '+e.message)}}"
+          s = s.replace(old_images, new_images)
+
+          old_compress = "async function compressPdf(){const f=getFile('compress');if(!f)return;const target=Math.max(.1,Number(document.getElementById('targetMB').value)||5),scale0=Number(document.getElementById('compressScale').value)||1.25,q0=Number(document.getElementById('compressQuality').value)||.7;try{status('Compressão: preparando...');const original=f.size,rendered=await renderCompressionCanvases(f,scale0),scales=[scale0,scale0*.85,scale0*.7,scale0*.58],qualities=[q0,.65,.5,.38,.28];let best=null;for(const sc of scales){let rr=rendered;if(sc!==scale0)rr=await renderCompressionCanvases(f,sc);for(const q of qualities){status(`Compressão: testando resolução ${Math.round(sc*72)} DPI e qualidade ${Math.round(q*100)}%...`);const bytes=await buildRasterPdf(rr,q);if(!best||bytes.length<best.length)best={bytes,length:bytes.length,sc,q};if(bytes.length<=target*1048576){saveBlob(bytes,'pdf_comprimido.pdf');status(`Concluído: ${(original/1048576).toFixed(2)} MB → ${(bytes.length/1048576).toFixed(2)} MB (${Math.round((1-bytes.length/original)*100)}% menor).`);return}}}saveBlob(best.bytes,'pdf_comprimido.pdf');status(`Não foi possível atingir ${target.toFixed(2)} MB sem compressão ainda mais agressiva. Melhor resultado: ${(original/1048576).toFixed(2)} MB → ${(best.length/1048576).toFixed(2)} MB (${Math.round((1-best.length/original)*100)}% menor).`)}catch(e){alert('Falha ao comprimir: '+e.message)}}"
+          new_compress = "async function compressPdf(){const f=getFile('compress');if(!f)return;const target=Math.max(.1,Number(document.getElementById('targetMB').value)||5),scale0=Number(document.getElementById('compressScale').value)||1.25,q0=Number(document.getElementById('compressQuality').value)||.7;try{const original=f.size;if(original<=target*1048576){saveBlob(new Uint8Array(await f.arrayBuffer()),'pdf_comprimido.pdf');status(`O arquivo original já está abaixo da meta: ${(original/1048576).toFixed(2)} MB.`);return}status('Compressão: preparando...');const rendered=await renderCompressionCanvases(f,scale0),scales=[scale0,scale0*.85,scale0*.7,scale0*.58],qualities=[q0,.65,.5,.38,.28];let best=null;for(const sc of scales){let rr=rendered;if(sc!==scale0)rr=await renderCompressionCanvases(f,sc);for(const q of qualities){status(`Compressão: testando resolução ${Math.round(sc*72)} DPI e qualidade ${Math.round(q*100)}%...`);const bytes=await buildRasterPdf(rr,q);if(!best||bytes.length<best.length)best={bytes,length:bytes.length,sc,q};if(bytes.length<=target*1048576){saveBlob(bytes,'pdf_comprimido.pdf');status(`Concluído: ${(original/1048576).toFixed(2)} MB → ${(bytes.length/1048576).toFixed(2)} MB (${Math.round((1-bytes.length/original)*100)}% menor).`);return}}}saveBlob(best.bytes,'pdf_comprimido.pdf');status(`Não foi possível atingir ${target.toFixed(2)} MB sem compressão ainda mais agressiva. Melhor resultado: ${(original/1048576).toFixed(2)} MB → ${(best.length/1048576).toFixed(2)} MB (${Math.round((1-best.length/original)*100)}% menor).`)}catch(e){alert('Falha ao comprimir: '+e.message)}}"
+          s = s.replace(old_compress, new_compress)
+
           p.write_text(s, encoding='utf-8')
 
       - name: Validate frontend source
@@ -36,9 +44,11 @@ jobs:
           html = Path('frontend/index.html').read_text(encoding='utf-8')
           assert 'accept="image/png,image/jpeg"' in html
           assert 'OCR será habilitado quando o backend estiver hospedado.' in html
+          assert 'Formato não suportado. Use PNG ou JPEG.' in html
+          assert 'O arquivo original já está abaixo da meta' in html
           handlers = set(re.findall(r"onclick=[\"'](?:await\s+)?([A-Za-z_$][\w$]*)\s*\(", html, re.I))
           funcs = set(re.findall(r"(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", html))
-          missing = sorted(h for h in handlers if h not in funcs and h not in {'switchTab'})
+          missing = sorted(h for h in handlers if h not in funcs and h not in {'switchTab', 'window'})
           assert not missing, missing
 
       - name: Commit stabilized frontend
@@ -49,6 +59,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No frontend changes needed.'
           else
-            git commit -m 'fix: stabilize browser-only frontend tools'
+            git commit -m 'fix: harden browser PDF tools'
             git push
           fi
