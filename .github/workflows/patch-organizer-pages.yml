@@ -1,0 +1,88 @@
+name: Patch browser PDF organizer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-organizer-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch frontend organizer
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('frontend/index.html')
+          text = path.read_text(encoding='utf-8')
+
+          old = re.search(r'async function saveOrg\(\)\{.*?\}\nasync function loadCapabilities', text, re.S)
+          if not old:
+              raise SystemExit('saveOrg function not found')
+
+          new = r'''async function saveOrg(){
+            if(!orgFiles.length||!items.length){alert('Adicione pelo menos um PDF.');return}
+            syncOrder();
+            try{
+              if(!window.PDFLib||!window.PDFLib.PDFDocument)throw new Error('Biblioteca PDF ainda não carregada. Aguarde alguns segundos e tente novamente.');
+              statusOrg('Gerando PDF final no navegador...');
+              const {PDFDocument,degrees}=window.PDFLib;
+              const sources=[];
+              for(const file of orgFiles){
+                sources.push(await PDFDocument.load(await file.arrayBuffer()));
+              }
+              const out=await PDFDocument.create();
+              for(const item of items){
+                const source=sources[item.fileIndex];
+                if(!source)throw new Error('PDF de origem não encontrado.');
+                const copied=await out.copyPages(source,[item.page-1]);
+                const page=copied[0];
+                if(item.rot){
+                  const current=page.getRotation().angle||0;
+                  page.setRotation(degrees((current+item.rot)%360));
+                }
+                out.addPage(page);
+              }
+              const bytes=await out.save();
+              await download(new Blob([bytes],{type:'application/pdf'}),'pdf_organizado.pdf');
+              statusOrg('PDF organizado salvo com sucesso.');
+            }catch(e){
+              statusOrg('Erro ao salvar: '+(e.message||e));
+              alert('Não foi possível salvar o PDF organizado:\n'+(e.message||e));
+            }
+          }
+          async function loadCapabilities'''
+
+          text = text[:old.start()] + new + text[old.end():]
+
+          marker = "window.PDFLib=pdfLib;"
+          if marker not in text:
+              text = text.replace(
+                  "window.pdfjsLib=pdfjsLib;",
+                  "window.pdfjsLib=pdfjsLib;\nimport * as pdfLib from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';\nwindow.PDFLib=pdfLib;"
+              )
+
+          path.write_text(text, encoding='utf-8')
+          print('frontend/index.html patched successfully')
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/index.html
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'fix: generate organized PDF in browser'
+            git push
+          fi
