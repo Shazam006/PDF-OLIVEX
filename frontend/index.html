@@ -88,7 +88,37 @@ function clearSel(){document.querySelectorAll('.page').forEach(x=>x.classList.re
 function deleteSel(){syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;recordOrg();items=items.filter(x=>!ids.has(x.id));renderPdfList();renderPages();recordOrg();statusOrg(ids.size+' página(s) removida(s).')}
 function rotateSel(){syncOrder();const ids=new Set([...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id));if(!ids.size)return;recordOrg();items.forEach(x=>{if(ids.has(x.id))x.rot=(x.rot+90)%360});renderPages();recordOrg();statusOrg('Página(s) girada(s).')}
 function duplicateSel(){syncOrder();const selected=[...document.querySelectorAll('.page.selected')].map(x=>x.dataset.id);if(!selected.length){alert('Selecione pelo menos uma página.');return}recordOrg();const set=new Set(selected);const result=[];for(const item of items){result.push(item);if(set.has(item.id))result.push({...item,id:crypto.randomUUID()})}items=result;clearSel();renderPdfList();renderPages();recordOrg();statusOrg('Página(s) duplicada(s).')}
-async function saveOrg(){if(!orgFiles.length||!items.length){alert('Adicione pelo menos um PDF.');return}syncOrder();const fd=new FormData();orgFiles.forEach(f=>fd.append('files',f));fd.append('order',JSON.stringify(items.map(x=>({fileIndex:x.fileIndex,page:x.page}))));fd.append('rotations',JSON.stringify(items.filter(x=>x.rot).map(x=>({fileIndex:x.fileIndex,page:x.page,rotation:x.rot}))));try{statusOrg('Gerando PDF final...');const r=await fetch('/api/organize-multi',{method:'POST',body:fd});if(!r.ok)throw new Error(await r.text());await download(await r.blob(),'pdf_organizado.pdf');statusOrg('PDF organizado salvo com sucesso.')}catch(e){statusOrg('Erro ao salvar: '+e.message);alert('Não foi possível salvar o PDF organizado:\n'+e.message)}}
+async function saveOrg(){
+  if(!orgFiles.length||!items.length){alert('Adicione pelo menos um PDF.');return}
+  syncOrder();
+  try{
+    if(!window.PDFLib||!window.PDFLib.PDFDocument)throw new Error('Biblioteca PDF ainda não carregada. Aguarde alguns segundos e tente novamente.');
+    statusOrg('Gerando PDF final no navegador...');
+    const {PDFDocument,degrees}=window.PDFLib;
+    const sources=[];
+    for(const file of orgFiles){
+      sources.push(await PDFDocument.load(await file.arrayBuffer()));
+    }
+    const out=await PDFDocument.create();
+    for(const item of items){
+      const source=sources[item.fileIndex];
+      if(!source)throw new Error('PDF de origem não encontrado.');
+      const copied=await out.copyPages(source,[item.page-1]);
+      const page=copied[0];
+      if(item.rot){
+        const current=page.getRotation().angle||0;
+        page.setRotation(degrees((current+item.rot)%360));
+      }
+      out.addPage(page);
+    }
+    const bytes=await out.save();
+    await download(new Blob([bytes],{type:'application/pdf'}),'pdf_organizado.pdf');
+    statusOrg('PDF organizado salvo com sucesso.');
+  }catch(e){
+    statusOrg('Erro ao salvar: '+(e.message||e));
+    alert('Não foi possível salvar o PDF organizado:\n'+(e.message||e));
+  }
+}
 async function loadCapabilities(){const el=document.getElementById('capabilities');try{const r=await fetch('/api/system/capabilities');if(!r.ok)throw new Error('HTTP '+r.status);const c=await r.json();const yes=k=>c[k]?'OK':'não instalado';el.textContent='Recursos: LibreOffice '+yes('libreoffice')+' · OCRmyPDF '+yes('ocrmypdf')+' · Tesseract '+yes('tesseract')+' · Ghostscript '+yes('ghostscript')}catch(e){el.textContent='Não foi possível verificar os recursos do sistema.'}}
 document.addEventListener('DOMContentLoaded',()=>{const first=document.querySelector('.tab[data-tab="organizar"]');switchTab('organizar',first);recordOrg();loadCapabilities()});
 document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});document.addEventListener('drop',async e=>{if(!e.dataTransfer||![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));if(files.length)await addPdfFiles(files)});
@@ -97,6 +127,8 @@ document.addEventListener('dragover',e=>{if(e.dataTransfer&&[...e.dataTransfer.t
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
 window.pdfjsLib=pdfjsLib;
+import * as pdfLib from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
+window.PDFLib=pdfLib;
 </script>
 </body>
 </html>
