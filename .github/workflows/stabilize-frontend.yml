@@ -1,0 +1,54 @@
+name: Stabilize frontend
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  stabilize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply safe browser-only fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('frontend/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace('accept="image/*"', 'accept="image/png,image/jpeg"')
+          s = s.replace('<p>OCR local no navegador.</p><input id="ocr" type="file" accept=".pdf"><select id="ocrLang"><option value="por">Português</option><option value="eng">Inglês</option><option value="spa">Espanhol</option></select><button class="action" onclick="ocrPdf()">Executar OCR</button>', '<p>OCR avançado exige processamento adicional e não está habilitado no GitHub Pages.</p><button class="action" onclick="info(\'OCR será habilitado quando o backend estiver hospedado.\')">Ver status</button>')
+          s = s.replace("async function ocrPdf(){const f=getFile('ocr');if(!f)return;alert('O OCR local continua disponível, mas pode exigir bastante memória em PDFs grandes.');}", "async function ocrPdf(){info('OCR não está disponível nesta versão estática do GitHub Pages.');}")
+
+          p.write_text(s, encoding='utf-8')
+
+      - name: Validate frontend source
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          html = Path('frontend/index.html').read_text(encoding='utf-8')
+          assert 'accept="image/png,image/jpeg"' in html
+          assert 'OCR será habilitado quando o backend estiver hospedado.' in html
+          handlers = set(re.findall(r'onclick=[\"\'](?:await\s+)?([A-Za-z_$][\\w$]*)\\s*\\(', html, re.I))
+          funcs = set(re.findall(r'(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)\\s*\\(', html))
+          missing = sorted(h for h in handlers if h not in funcs and h not in {'switchTab'})
+          assert not missing, missing
+
+      - name: Commit stabilized frontend
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/index.html
+          if git diff --cached --quiet; then
+            echo 'No frontend changes needed.'
+          else
+            git commit -m 'fix: stabilize browser-only frontend tools'
+            git push
+          fi
