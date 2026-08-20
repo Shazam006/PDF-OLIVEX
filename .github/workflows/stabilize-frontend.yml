@@ -36,8 +36,8 @@ jobs:
           html = Path('frontend/index.html').read_text(encoding='utf-8')
           assert 'accept="image/png,image/jpeg"' in html
           assert 'OCR será habilitado quando o backend estiver hospedado.' in html
-          handlers = set(re.findall(r'onclick=[\"\'](?:await\s+)?([A-Za-z_$][\\w$]*)\\s*\\(', html, re.I))
-          funcs = set(re.findall(r'(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)\\s*\\(', html))
+          handlers = set(re.findall(r"onclick=[\"'](?:await\s+)?([A-Za-z_$][\w$]*)\s*\(", html, re.I))
+          funcs = set(re.findall(r"(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", html))
           missing = sorted(h for h in handlers if h not in funcs and h not in {'switchTab'})
           assert not missing, missing
 
