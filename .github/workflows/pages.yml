@@ -27,6 +27,7 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      # Deploy the current frontend from main, including browser-side PDF processing.
       - name: Prepare static site
         run: |
           mkdir -p _site
