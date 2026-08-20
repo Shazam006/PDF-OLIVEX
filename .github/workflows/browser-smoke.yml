@@ -1,0 +1,32 @@
+name: Browser smoke tests
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install browser test dependencies
+        run: |
+          npm init -y
+          npm install --no-save playwright pdf-lib
+          npx playwright install --with-deps chromium
+
+      - name: Start static frontend
+        run: |
+          nohup python3 -m http.server 8000 --directory frontend >/tmp/pdf-olivex-http.log 2>&1 &
+          sleep 2
+
+      - name: Run browser smoke tests
+        run: node tests/browser-smoke.mjs
