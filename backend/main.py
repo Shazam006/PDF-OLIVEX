@@ -1,373 +1,405 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pypdf import PdfReader, PdfWriter
+from contextlib import asynccontextmanager
+import copy
+import io
+import json
+import os
+from pathlib import Path
+import zipfile
+
 import fitz
 import img2pdf
-import os, uuid, shutil, tempfile, subprocess, zipfile, glob, json, mimetypes
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from PIL import Image
+from pypdf import PdfWriter
 
-BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-WORK = os.path.join(BASE, "work")
-FRONT = os.path.join(BASE, "frontend")
-os.makedirs(WORK, exist_ok=True)
-
-def tool_path(names):
-    for name in names:
-        p = shutil.which(name)
-        if p:
-            return p
-    return None
-
-def system_capabilities():
-    return {
-        "libreoffice": bool(tool_path(["soffice", "libreoffice"])),
-        "tesseract": bool(tool_path(["tesseract"])),
-        "ocrmypdf": bool(tool_path(["ocrmypdf"])),
-        "ghostscript": bool(tool_path(["gswin64c", "gs"])),
-        "verapdf": bool(tool_path(["verapdf"])),
-    }
+from .runtime import (FRONT, MAX_PAGES, IMAGES, OFFICE, JobMiddleware,
+                      cleanup_stale, download, job, open_pdf, out, parse_pages,
+                      reader_pdf, require_tool, run_tool, save_upload,
+                      system_capabilities, tool_path, write_pdf)
+from .visual import apply_operations, inspect_forms, update_forms, compare_pdfs
+from .conversions import html_to_pdf, pdf_to_office, pdf_a, sign
 
 
-app = FastAPI(title="PDF OLIVEX", version="4.2")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
-)
-app.mount("/assets", StaticFiles(directory=os.path.join(FRONT, "assets")), name="assets")
+@asynccontextmanager
+async def lifespan(app):
+    cleanup_stale()
+    yield
 
-@app.get("/", response_class=HTMLResponse)
+
+app = FastAPI(title="PDF OLIVEX", version="4.3", lifespan=lifespan)
+app.add_middleware(JobMiddleware)
+app.add_middleware(CORSMiddleware,
+    allow_origins=[s.strip() for s in os.getenv("ALLOWED_ORIGINS", "https://shazam006.github.io,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8768,http://127.0.0.1:8768").split(",") if s.strip()],
+    allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type"],
+    expose_headers=["Content-Disposition", "X-Original-Bytes", "X-Final-Bytes", "X-Reduction-Percent", "X-Target-Met", "X-PDF-Profile", "X-PDFA-Validation", "X-Request-ID"])
+app.mount("/assets", StaticFiles(directory=FRONT / "assets"), name="assets")
+
+
+@app.exception_handler(Exception)
+async def processing_error(request: Request, exc: Exception):
+    from .runtime import logger
+    logger.error("endpoint=%s error=%s", request.url.path, type(exc).__name__)
+    return JSONResponse({"detail": "Falha técnica no processamento. Verifique o arquivo e tente novamente."}, 500)
+
+
+@app.get("/")
 def home():
-    with open(os.path.join(FRONT, "index.html"), encoding="utf-8") as f:
-        return f.read()
+    return FileResponse(FRONT / "index.html", media_type="text/html")
 
-def save_upload(upload: UploadFile):
-    ext = os.path.splitext(upload.filename or "")[1].lower()
-    path = os.path.join(WORK, uuid.uuid4().hex + ext)
-    with open(path, "wb") as f:
-        shutil.copyfileobj(upload.file, f)
-    return path
-
-def out(ext=".pdf"):
-    return os.path.join(WORK, uuid.uuid4().hex + ext)
-
-def download(path, filename, media):
-    return FileResponse(path, filename=filename, media_type=media)
-
-def parse_pages(expr, total):
-    result = []
-    for part in expr.split(","):
-        part = part.strip()
-        if not part: continue
-        if "-" in part:
-            a,b = map(int, part.split("-",1))
-            if a > b: a,b = b,a
-            result.extend(range(a,b+1))
-        else:
-            result.append(int(part))
-    if any(n < 1 or n > total for n in result):
-        raise ValueError
-    return result
 
 @app.get("/api/health")
 def health():
-    return {"status":"ok","version":"4.2","local":True}
+    return {"status": "ok", "version": "4.3", "local": os.getenv("APP_ENV", "local") == "local"}
 
-@app.post("/api/system/cleanup")
-def cleanup():
-    removed=0
-    for name in os.listdir(WORK):
-        path=os.path.join(WORK,name)
-        try:
-            if os.path.isfile(path):
-                os.remove(path); removed += 1
-        except OSError:
-            pass
-    return {"removed":removed}
 
 @app.get("/api/system/capabilities")
 def capabilities():
     return system_capabilities()
 
+
+@app.post("/api/system/cleanup")
+def cleanup():
+    return {"removed": cleanup_stale()}
+
+
 @app.post("/api/merge")
-async def merge(files: list[UploadFile] = File(...)):
-    if len(files) < 2: raise HTTPException(400,"Envie pelo menos 2 PDFs.")
-    writer=PdfWriter()
-    for f in files:
-        r=PdfReader(save_upload(f))
-        for p in r.pages: writer.add_page(p)
-    path=out()
-    with open(path,"wb") as h: writer.write(h)
-    return download(path,"pdf_unificado.pdf","application/pdf")
+def merge(files: list[UploadFile] = File(...)):
+    if len(files) < 2:
+        raise HTTPException(400, "Envie pelo menos 2 PDFs.")
+    writer = PdfWriter()
+    for index, file in enumerate(files):
+        reader = reader_pdf(file)
+        if len(writer.pages) + len(reader.pages) > MAX_PAGES:
+            raise HTTPException(400, f"O resultado excede {MAX_PAGES} páginas.")
+        if reader.get_fields():
+            reader.add_form_topname(f"arquivo_{index+1}")
+        writer.append(reader)
+    return write_pdf(writer, "pdf_unificado.pdf")
+
 
 @app.post("/api/organize")
-async def organize(file: UploadFile=File(...), order:str=Form(...), rotations:str=Form("")):
-    r=PdfReader(save_upload(file))
-    nums=[int(x) for x in order.split(",") if x.strip()]
-    if sorted(nums)!=list(range(1,len(r.pages)+1)):
-        raise HTTPException(400,"A ordem deve conter todas as páginas uma única vez.")
-    rots={}
-    if rotations:
-        for pair in rotations.split(","):
-            if ":" in pair:
-                n,d=pair.split(":",1); rots[int(n)]=int(d)%360
-    w=PdfWriter()
-    for n in nums:
-        p=r.pages[n-1]
-        if rots.get(n,0): p.rotate(rots[n])
-        w.add_page(p)
-    path=out()
-    with open(path,"wb") as h:w.write(h)
-    return download(path,"pdf_organizado.pdf","application/pdf")
+def organize(file: UploadFile = File(...), order: str = Form(...), rotations: str = Form("")):
+    reader = reader_pdf(file)
+    nums = parse_pages(order, len(reader.pages))
+    if sorted(nums) != list(range(1, len(reader.pages)+1)):
+        raise HTTPException(400, "A ordem deve conter todas as páginas uma única vez.")
+    try:
+        rots = dict(map(lambda pair: map(int, pair.split(":")), rotations.split(","))) if rotations else {}
+        if any(deg % 90 for deg in rots.values()):
+            raise ValueError
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Rotações inválidas. Use múltiplos de 90 graus.")
+    writer = PdfWriter()
+    for number in nums:
+        page = copy.copy(reader.pages[number-1])
+        page.rotate(rots.get(number, 0) % 360)
+        writer.add_page(page)
+    return write_pdf(writer, "pdf_organizado.pdf")
+
 
 @app.post("/api/organize-multi")
-async def organize_multi(files: list[UploadFile]=File(...), order: str=Form(...), rotations: str=Form("")):
-    if not files:
-        raise HTTPException(400, "Envie pelo menos um PDF.")
+def organize_multi(files: list[UploadFile] = File(...), order: str = Form(...), rotations: str = Form("")):
+    readers = [reader_pdf(file) for file in files]
     try:
-        import json
-        order_data=json.loads(order)
-    except Exception:
-        raise HTTPException(400, "Ordem de páginas inválida.")
-    if not isinstance(order_data,list) or not order_data:
-        raise HTTPException(400, "A organização não contém páginas.")
-    paths=[save_upload(f) for f in files]
-    try:
-        readers=[PdfReader(path) for path in paths]
-        for item in order_data:
-            fi=int(item["fileIndex"]); pg=int(item["page"])
-            if fi<0 or fi>=len(readers) or pg<1 or pg>len(readers[fi].pages):
+        sequence = json.loads(order)
+        legacy = {(int(i["fileIndex"]), int(i["page"])): int(i["rotation"]) for i in json.loads(rotations or "[]")}
+        if not isinstance(sequence, list) or not 0 < len(sequence) <= MAX_PAGES:
+            raise ValueError
+        writer = PdfWriter()
+        for item in sequence:
+            fi, pg = int(item["fileIndex"]), int(item["page"])
+            rotation = int(item.get("rotation", legacy.get((fi, pg), 0)))
+            if fi < 0 or fi >= len(readers) or not 1 <= pg <= len(readers[fi].pages) or rotation % 90:
                 raise ValueError
-        rots={}
-        if rotations:
-            try:
-                for item in json.loads(rotations):
-                    rots[(int(item["fileIndex"]),int(item["page"]))]=int(item["rotation"])%360
-            except Exception:
-                raise HTTPException(400,"Rotações inválidas.")
-        w=PdfWriter()
-        for item in order_data:
-            fi=int(item["fileIndex"]);pg=int(item["page"])
-            page=readers[fi].pages[pg-1];rot=rots.get((fi,pg),0)
-            if rot: page.rotate(rot)
-            w.add_page(page)
-        path=out()
-        with open(path,"wb") as h:w.write(h)
-        return download(path,"pdf_organizado.pdf","application/pdf")
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(400,"Não foi possível montar o PDF com a ordem informada.")
-    finally:
-        for path in paths:
-            try: os.remove(path)
-            except OSError: pass
+            page = copy.copy(readers[fi].pages[pg-1])
+            page.rotate(rotation % 360)
+            writer.add_page(page)
+        return write_pdf(writer, "pdf_organizado.pdf")
+    except (ValueError, TypeError, KeyError, IndexError, json.JSONDecodeError):
+        raise HTTPException(400, "Ordem ou rotações de páginas inválidas.")
+
 
 @app.post("/api/split")
-async def split(file:UploadFile=File(...), pages:str=Form(...)):
-    r=PdfReader(save_upload(file)); nums=parse_pages(pages,len(r.pages))
-    w=PdfWriter()
-    for n in nums:w.add_page(r.pages[n-1])
-    path=out()
-    with open(path,"wb") as h:w.write(h)
-    return download(path,"paginas_extraidas.pdf","application/pdf")
+def split(file: UploadFile = File(...), pages: str = Form(...), mode: str = Form("extract")):
+    reader = reader_pdf(file)
+    nums = parse_pages(pages, len(reader.pages))
+    if mode == "individual":
+        path = out(".zip")
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for index, number in enumerate(nums):
+                writer = PdfWriter()
+                writer.add_page(reader.pages[number-1])
+                data = io.BytesIO()
+                writer.write(data)
+                archive.writestr(f"{index+1:03d}_pagina_{number}.pdf", data.getvalue())
+        return download(path, "paginas_separadas.zip", "application/zip")
+    if mode != "extract":
+        raise HTTPException(400, "Modo de divisão inválido.")
+    writer = PdfWriter()
+    for number in nums:
+        writer.add_page(reader.pages[number-1])
+    return write_pdf(writer, "paginas_extraidas.pdf")
+
 
 @app.post("/api/remove-pages")
-async def remove_pages(file:UploadFile=File(...), pages:str=Form(...)):
-    r=PdfReader(save_upload(file)); rem=set(parse_pages(pages,len(r.pages)))
-    if len(rem)>=len(r.pages): raise HTTPException(400,"Não é possível remover todas as páginas.")
-    w=PdfWriter()
-    for i,p in enumerate(r.pages,1):
-        if i not in rem:w.add_page(p)
-    path=out()
-    with open(path,"wb") as h:w.write(h)
-    return download(path,"pdf_sem_paginas.pdf","application/pdf")
+def remove_pages(file: UploadFile = File(...), pages: str = Form(...)):
+    reader = reader_pdf(file)
+    removed = set(parse_pages(pages, len(reader.pages)))
+    if len(removed) == len(reader.pages):
+        raise HTTPException(400, "Não é possível remover todas as páginas.")
+    writer = PdfWriter()
+    for number, page in enumerate(reader.pages, 1):
+        if number not in removed:
+            writer.add_page(page)
+    return write_pdf(writer, "pdf_sem_paginas.pdf")
+
 
 @app.post("/api/rotate")
-async def rotate(file:UploadFile=File(...), degrees:int=Form(90)):
-    if degrees%90: raise HTTPException(400,"Use múltiplos de 90 graus.")
-    r=PdfReader(save_upload(file)); w=PdfWriter()
-    for p in r.pages:p.rotate(degrees%360);w.add_page(p)
-    path=out()
-    with open(path,"wb") as h:w.write(h)
-    return download(path,"pdf_rotacionado.pdf","application/pdf")
+def rotate(file: UploadFile = File(...), degrees: int = Form(90)):
+    if degrees % 90:
+        raise HTTPException(400, "Use múltiplos de 90 graus.")
+    reader = reader_pdf(file)
+    writer = PdfWriter()
+    for page in reader.pages:
+        page.rotate(degrees % 360)
+        writer.add_page(page)
+    return write_pdf(writer, "pdf_rotacionado.pdf")
+
+
+def convert_images(files):
+    if not 0 < len(files) <= MAX_PAGES:
+        raise HTTPException(400, f"Envie entre 1 e {MAX_PAGES} imagens.")
+    paths = [save_upload(file, IMAGES) for file in files]
+    normalized=[]
+    for source in paths:
+        if Path(source).suffix==".webp":
+            with Image.open(source) as image:
+                if getattr(image,"n_frames",1)>1:
+                    raise HTTPException(400,"WebP animado não é aceito. Use uma imagem estática.")
+                png=out(".png")
+                image.save(png,"PNG")
+                normalized.append(png)
+        else:
+            normalized.append(source)
+    path = out()
+    try:
+        with open(path, "wb") as stream:
+            stream.write(img2pdf.convert(normalized))
+    except Exception:
+        raise HTTPException(400, "Não foi possível converter as imagens.")
+    with open_pdf(path):
+        pass
+    return path
+
 
 @app.post("/api/images-to-pdf")
-async def images_to_pdf(files:list[UploadFile]=File(...)):
-    paths=[save_upload(f) for f in files]
-    try:
-        path=out()
-        with open(path,"wb") as h:h.write(img2pdf.convert(paths))
-        return download(path,"imagens.pdf","application/pdf")
-    except Exception as e: raise HTTPException(400,f"Falha na conversão: {e}")
+def images_to_pdf(files: list[UploadFile] = File(...)):
+    return download(convert_images(files), "imagens.pdf")
+
 
 @app.post("/api/pdf-to-images")
-async def pdf_to_images(file:UploadFile=File(...), fmt:str=Form("png"), dpi:int=150):
-    doc=fitz.open(save_upload(file)); td=tempfile.mkdtemp(dir=WORK)
-    ext="jpg" if fmt.lower()=="jpg" else "png"
-    for i,p in enumerate(doc,1):
-        pix=p.get_pixmap(matrix=fitz.Matrix(dpi/72,dpi/72),alpha=False)
-        pix.save(os.path.join(td,f"pagina_{i:03d}.{ext}"))
-    archive=out(".zip")[:-4]
-    shutil.make_archive(archive,"zip",td)
-    return download(archive+".zip","pdf_para_imagens.zip","application/zip")
+def pdf_to_images(file: UploadFile = File(...), fmt: str = Form("png"), dpi: int = Form(150, ge=72, le=300)):
+    if fmt not in {"png", "jpg"}:
+        raise HTTPException(400, "Formato de imagem inválido.")
+    path = out(".zip")
+    with open_pdf(save_upload(file)) as doc, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for number, page in enumerate(doc, 1):
+            if page.rect.width * page.rect.height * (dpi/72)**2 > 25_000_000:
+                raise HTTPException(400, "Página muito grande para este DPI. Reduza a resolução.")
+            pix = page.get_pixmap(dpi=dpi, alpha=False)
+            archive.writestr(f"pagina_{number:03d}.{fmt}", pix.tobytes("jpeg" if fmt == "jpg" else "png"))
+    return download(path, "pdf_para_imagens.zip", "application/zip")
+
 
 @app.post("/api/compress")
-async def compress(file:UploadFile=File(...), level:str=Form("balanced")):
-    src=save_upload(file)
-    try:
-        doc=fitz.open(src)
-        path=out()
-        # Conservative defaults preserve technical drawings and scans.
-        # Higher compression profiles use controlled image re-encoding.
-        if level == "maximum":
-            # Rasterize pages at a moderate DPI only when necessary; this is
-            # intentionally opt-in because it can degrade vector drawings.
-            newdoc=fitz.open()
-            for p in doc:
-                pix=p.get_pixmap(matrix=fitz.Matrix(1.35,1.35), alpha=False)
-                img=fitz.Pixmap(fitz.csRGB, pix)
-                rect=p.rect
-                np=newdoc.new_page(width=rect.width, height=rect.height)
-                np.insert_image(rect, pixmap=img, keep_proportion=False)
-            newdoc.save(path, garbage=4, deflate=True, clean=True)
-            newdoc.close()
-        else:
-            doc.save(path, garbage=4, deflate=True, clean=True)
-        doc.close()
-        # Validate output.
-        check=fitz.open(path); check.close()
-        return download(path,"pdf_comprimido.pdf","application/pdf")
-    except Exception as e:
-        raise HTTPException(400,f"Não foi possível comprimir o PDF: {e}")
+def compress(file: UploadFile = File(...), level: str = Form("balanced"), target_mb: float | None = Form(None, gt=0)):
+    if level not in {"lossless", "balanced", "maximum"}:
+        raise HTTPException(400, "Perfil de compressão inválido.")
+    source = save_upload(file)
+    original = Path(source).stat().st_size
+    best, best_size = source, original
+    with open_pdf(source) as doc:
+        images, text_pages = {}, 0
+        for page in doc:
+            text_pages += bool(page.get_text().strip())
+            for info in page.get_images(full=True):
+                images.setdefault(info[0], page.number)
+        profile = "scanned" if images and not text_pages else "mixed" if images else "textual"
+        lossless = out()
+        doc.save(lossless, garbage=4, deflate=True, clean=True)
+        if Path(lossless).stat().st_size < best_size:
+            best, best_size = lossless, Path(lossless).stat().st_size
+    if level != "lossless" and images:
+        attempts = [(1600, 80)] if level == "balanced" else [(1600, 75), (1200, 60), (900, 45)]
+        for max_dimension, quality in attempts:
+            with open_pdf(source) as doc:
+                for xref, page_number in images.items():
+                    image_data = doc.extract_image(xref)
+                    if not image_data or image_data.get("smask"):
+                        continue
+                    try:
+                        with Image.open(io.BytesIO(image_data["image"])) as image:
+                            if image.width * image.height > 25_000_000:
+                                continue
+                            image = image.convert("RGB")
+                            image.thumbnail((max_dimension, max_dimension))
+                            encoded = io.BytesIO()
+                            image.save(encoded, "JPEG", quality=quality, optimize=True)
+                            if len(encoded.getvalue()) < len(image_data["image"]):
+                                doc[page_number].replace_image(xref, stream=encoded.getvalue())
+                    except (OSError, ValueError):
+                        continue
+                candidate = out()
+                doc.save(candidate, garbage=4, deflate=True, clean=True)
+                size = Path(candidate).stat().st_size
+                if size < best_size:
+                    best, best_size = candidate, size
+            if target_mb and best_size <= target_mb * 1024**2:
+                break
+    headers = {"X-Original-Bytes": str(original), "X-Final-Bytes": str(best_size),
+               "X-Reduction-Percent": f"{(1-best_size/original)*100:.2f}", "X-PDF-Profile": profile,
+               "X-Target-Met": "not-set" if target_mb is None else str(best_size <= target_mb * 1024**2).lower()}
+    return download(best, "pdf_comprimido.pdf", headers=headers)
+
 
 @app.post("/api/watermark")
-async def watermark(file:UploadFile=File(...), text:str=Form(...)):
-    doc=fitz.open(save_upload(file))
-    for p in doc:
-        r=p.rect
-        p.insert_text((r.width/2-120,r.height/2),text,fontsize=28,rotate=45,
-                      color=(0.5,0.5,0.5),fill_opacity=0.25)
-    path=out();doc.save(path,garbage=4,deflate=True);doc.close()
-    return download(path,"pdf_marca_dagua.pdf","application/pdf")
+def watermark(file: UploadFile = File(...), text: str = Form(..., min_length=1, max_length=200)):
+    if not text.strip():
+        raise HTTPException(400, "Informe o texto da marca d'água.")
+    path = out()
+    with open_pdf(save_upload(file)) as doc:
+        font = fitz.Font("helv")
+        for page in doc:
+            size = min(32, page.rect.width * .8 / max(font.text_length(text, fontsize=1), 1))
+            center = fitz.Point(page.rect.width/2, page.rect.height/2)
+            page.insert_text((center.x-font.text_length(text, fontsize=size)/2, center.y), text,
+                fontsize=size, color=(.45,.45,.45), fill_opacity=.25, morph=(center, fitz.Matrix(35)))
+        doc.save(path, garbage=4, deflate=True)
+    return download(path, "pdf_marca_dagua.pdf")
+
 
 @app.post("/api/protect")
-async def protect(file:UploadFile=File(...), password:str=Form(...)):
-    r=PdfReader(save_upload(file));w=PdfWriter()
-    for p in r.pages:w.add_page(p)
-    w.encrypt(password);path=out()
-    with open(path,"wb") as h:w.write(h)
-    return download(path,"pdf_protegido.pdf","application/pdf")
+def protect(file: UploadFile = File(...), password: str = Form(..., min_length=1, max_length=256)):
+    writer = PdfWriter()
+    writer.clone_document_from_reader(reader_pdf(file))
+    writer.encrypt(password, algorithm="AES-256")
+    return write_pdf(writer, "pdf_protegido.pdf")
+
 
 @app.post("/api/unlock")
-async def unlock(file:UploadFile=File(...), password:str=Form("")):
-    path=save_upload(file);r=PdfReader(path)
-    if r.is_encrypted:
-        if not r.decrypt(password): raise HTTPException(400,"Senha incorreta.")
-    w=PdfWriter()
-    for p in r.pages:w.add_page(p)
-    path2=out()
-    with open(path2,"wb") as h:w.write(h)
-    return download(path2,"pdf_desbloqueado.pdf","application/pdf")
+def unlock(file: UploadFile = File(...), password: str = Form("")):
+    reader = reader_pdf(file, allow_encrypted=True)
+    if reader.is_encrypted and not reader.decrypt(password):
+        raise HTTPException(400, "Senha incorreta.")
+    writer = PdfWriter()
+    writer.clone_document_from_reader(reader)
+    return write_pdf(writer, "pdf_desbloqueado.pdf")
+
 
 @app.post("/api/add-page-numbers")
-async def add_page_numbers(file:UploadFile=File(...), start:int=Form(1)):
-    doc=fitz.open(save_upload(file))
-    for i,p in enumerate(doc):
-        r=p.rect
-        p.insert_text((r.width/2-10,r.height-25),str(start+i),fontsize=10,color=(0,0,0))
-    path=out();doc.save(path);doc.close()
-    return download(path,"pdf_numerado.pdf","application/pdf")
+def add_page_numbers(file: UploadFile = File(...), start: int = Form(1, ge=0, le=100000)):
+    path = out()
+    with open_pdf(save_upload(file)) as doc:
+        for index, page in enumerate(doc):
+            page.insert_text((page.rect.width/2-10, page.rect.height-25), str(start+index), fontsize=10)
+        doc.save(path, garbage=4, deflate=True)
+    return download(path, "pdf_numerado.pdf")
+
 
 @app.post("/api/crop")
-async def crop(file:UploadFile=File(...), margin:float=Form(20)):
-    doc=fitz.open(save_upload(file))
-    for p in doc:
-        r=p.rect
-        p.set_cropbox(fitz.Rect(r.x0+margin,r.y0+margin,r.x1-margin,r.y1-margin))
-    path=out();doc.save(path);doc.close()
-    return download(path,"pdf_recortado.pdf","application/pdf")
+def crop(file: UploadFile = File(...), margin: float = Form(20, ge=0)):
+    path = out()
+    with open_pdf(save_upload(file)) as doc:
+        for page in doc:
+            rect = page.cropbox
+            if margin * 2 >= min(rect.width, rect.height):
+                raise HTTPException(400, "A margem elimina toda a página. Use um valor menor.")
+            page.set_cropbox(fitz.Rect(rect.x0+margin, rect.y0+margin, rect.x1-margin, rect.y1-margin))
+        doc.save(path)
+    return download(path, "pdf_recortado.pdf")
+
 
 @app.post("/api/repair")
-async def repair(file:UploadFile=File(...)):
-    path=save_upload(file)
-    try:
-        doc=fitz.open(path);new=out();doc.save(new,garbage=4,deflate=True,clean=True);doc.close()
-        return download(new,"pdf_reparado.pdf","application/pdf")
-    except Exception as e: raise HTTPException(400,f"Não foi possível reparar: {e}")
+def repair(file: UploadFile = File(...)):
+    path = out()
+    with open_pdf(save_upload(file)) as doc:
+        doc.save(path, garbage=4, deflate=True, clean=True)
+    return download(path, "pdf_reparado.pdf")
+
+
+def execute_ocr(source, language, output_type="pdf"):
+    require_tool("ocr" if output_type == "pdf" else "pdfa")
+    if language not in {"por", "eng", "spa", "por+eng", "por+eng+spa"}:
+        raise HTTPException(400, "Idioma OCR não suportado.")
+    path = out()
+    run_tool([tool_path(["ocrmypdf"]), "--skip-text", "--rotate-pages", "--deskew", "--jobs", "1",
+              "--output-type", output_type, "-l", language, source, path])
+    with open_pdf(path):
+        pass
+    return path
+
 
 @app.post("/api/ocr")
-async def ocr(file:UploadFile=File(...), language:str=Form("por")):
-    inp=save_upload(file); output=out()
-    exe=tool_path(["ocrmypdf"])
-    if not exe:
-        raise HTTPException(501,"OCR não instalado. Instale OCRmyPDF e Tesseract no Windows para habilitar esta função.")
-    p=subprocess.run([exe,"--deskew","--rotate-pages","-l",language,inp,output],capture_output=True,text=True)
-    if p.returncode!=0: raise HTTPException(500,p.stderr[-1500:])
-    return download(output,"pdf_ocr.pdf","application/pdf")
+def ocr(file: UploadFile = File(...), language: str = Form("por")):
+    source = save_upload(file)
+    with open_pdf(source):
+        pass
+    return download(execute_ocr(source, language), "pdf_ocr.pdf")
+
 
 @app.post("/api/scan-to-pdf")
-async def scan_to_pdf(files:list[UploadFile]=File(...), run_ocr:bool=Form(False), language:str=Form("por")):
-    if not files:
-        raise HTTPException(400,"Envie pelo menos uma imagem.")
-    images=[save_upload(f) for f in files]
-    pdf_path=out()
-    try:
-        with open(pdf_path,"wb") as h:
-            h.write(img2pdf.convert(images))
-    except Exception as e:
-        raise HTTPException(400,f"Não foi possível criar o PDF: {e}")
-    if not run_ocr:
-        return download(pdf_path,"digitalizacao.pdf","application/pdf")
-    exe=tool_path(["ocrmypdf"])
-    if not exe or not tool_path(["tesseract"]):
-        return download(pdf_path,"digitalizacao.pdf","application/pdf")
-    ocr_path=out()
-    p=subprocess.run([exe,"--deskew","--rotate-pages","-l",language,pdf_path,ocr_path],
-                     capture_output=True,text=True)
-    if p.returncode==0:
-        return download(ocr_path,"digitalizacao_ocr.pdf","application/pdf")
-    return download(pdf_path,"digitalizacao.pdf","application/pdf")
+def scan_to_pdf(files: list[UploadFile] = File(...), run_ocr: bool = Form(False), language: str = Form("por")):
+    path = convert_images(files)
+    if run_ocr:
+        path = execute_ocr(path, language)
+    return download(path, "digitalizacao_ocr.pdf" if run_ocr else "digitalizacao.pdf")
+
 
 @app.post("/api/office-to-pdf")
-async def office_to_pdf(file:UploadFile=File(...)):
-    inp=save_upload(file); outdir=tempfile.mkdtemp(dir=WORK)
-    exe=shutil.which("soffice") or shutil.which("libreoffice")
-    if not exe: raise HTTPException(501,"LibreOffice não está instalado.")
-    p=subprocess.run([exe,"--headless","--convert-to","pdf","--outdir",outdir,inp],capture_output=True,text=True)
-    pdfs=glob.glob(os.path.join(outdir,"*.pdf"))
-    if p.returncode!=0 or not pdfs: raise HTTPException(500,p.stderr[-1500:] or "Conversão falhou.")
-    return download(pdfs[0],"convertido.pdf","application/pdf")
+def office_to_pdf(file: UploadFile = File(...)):
+    require_tool("office")
+    source = save_upload(file, OFFICE)
+    directory = job.get()["directory"]
+    profile = Path(directory, "office-profile").as_uri()
+    run_tool([tool_path(["soffice", "libreoffice"]), f"-env:UserInstallation={profile}",
+              "--headless", "--convert-to", "pdf", "--outdir", directory, source])
+    path = str(Path(source).with_suffix(".pdf"))
+    if not Path(path).is_file():
+        raise HTTPException(400, "O LibreOffice não produziu um PDF.")
+    with open_pdf(path):
+        pass
+    return download(path, "convertido.pdf")
 
-@app.post("/api/html-to-pdf")
-async def html_to_pdf(file:UploadFile=File(...)):
-    raise HTTPException(501,"HTML → PDF será habilitado com um motor Chromium local na próxima etapa.")
 
-@app.post("/api/pdf-a")
-async def pdf_a(file:UploadFile=File(...)):
-    raise HTTPException(501,"PDF/A requer um conversor/validador PDF/A instalado. A interface já está preparada.")
+app.post("/api/html-to-pdf")(html_to_pdf)
+app.post("/api/pdf-to-office")(pdf_to_office)
+app.post("/api/pdf-a")(pdf_a)
+app.post("/api/sign")(sign)
 
-@app.post("/api/sign")
-async def sign(file:UploadFile=File(...)):
-    raise HTTPException(501,"Assinatura digital ainda requer configuração de certificado e política de assinatura.")
-
-@app.post("/api/redact")
-async def redact(file:UploadFile=File(...)):
-    raise HTTPException(501,"Ocultar informações exige seleção visual das áreas. O editor será implementado na etapa de edição visual.")
-
-@app.post("/api/compare")
-async def compare(file1:UploadFile=File(...), file2:UploadFile=File(...)):
-    raise HTTPException(501,"Comparação visual será implementada no editor avançado.")
-
-@app.post("/api/forms")
-async def forms(file:UploadFile=File(...)):
-    raise HTTPException(501,"Editor de formulários será implementado no módulo avançado.")
 
 @app.post("/api/edit")
-async def edit(file:UploadFile=File(...)):
-    raise HTTPException(501,"Editor visual será implementado no próximo módulo.")
+def edit(file: UploadFile = File(...), operations: str = Form(...)):
+    return apply_operations(file, operations, redaction=False)
 
-@app.post("/api/pdf-to-office")
-async def pdf_to_office(file:UploadFile=File(...), target:str=Form("docx")):
-    raise HTTPException(501,"PDF → Word/Excel/PowerPoint exige conversor específico. O módulo será implementado separadamente.")
+
+@app.post("/api/redact")
+def redact(file: UploadFile = File(...), operations: str = Form(...)):
+    return apply_operations(file, operations, redaction=True)
+
+
+@app.post("/api/forms/inspect")
+def forms_inspect(file: UploadFile = File(...)):
+    return inspect_forms(file)
+
+
+@app.post("/api/forms")
+def forms(file: UploadFile = File(...), values: str = Form("{}"), fields: str = Form("[]")):
+    return update_forms(file, values, fields)
+
+
+@app.post("/api/compare")
+def compare(file1: UploadFile = File(...), file2: UploadFile = File(...)):
+    return compare_pdfs(file1, file2)

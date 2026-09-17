@@ -1,29 +1,41 @@
-name: PDF OLIVEX CI
-
+name: Verify PDF OLIVEX
 on:
   push:
-    branches: [main, "automacao/**"]
+    branches: [main, "codex/**"]
   pull_request:
-
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install system dependencies
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: python -m venv .venv
+      - run: .venv/bin/python -m pip install -r requirements-dev.txt
+      - run: .venv/bin/python -m pytest -q
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Browser workflows, API and static
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libqpdf-dev
-
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt pytest httpx
-
-      - name: Run smoke tests
-        run: pytest -q
+          .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8768 > /tmp/olivex.log 2>&1 &
+          api_pid=$!
+          .venv/bin/python -m http.server 8769 --directory frontend > /tmp/olivex-static.log 2>&1 &
+          static_pid=$!
+          trap 'kill "$api_pid" "$static_pid"' EXIT
+          for i in $(seq 1 30); do curl --fail --silent http://127.0.0.1:8768/api/health && break; sleep 1; done
+          npm run test:ui
+          npm run test:static
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: browser-evidence, path: artifacts/}
+  engines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target test -t pdf-olivex-test .
+      - run: docker run --rm --network none --tmpfs /tmp:size=512m pdf-olivex-test
+      - run: docker build -t pdf-olivex:${{ github.sha }} .
