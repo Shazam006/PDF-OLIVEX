@@ -24,6 +24,8 @@
 - Preservado modo local para ferramentas simples na publicacao GitHub Pages.
 - Testes remotos reconciliados; CI verifica API, frontend estatico e motores.
 - Removidos workflows obsoletos que reescreviam automaticamente o HTML.
+- P12/PFX aceita MIME padrao e legado; assinatura validada no browser Linux.
+- Publicacao GitHub Pages verificada com processamento e downloads reais.
 
 Referencia preservada: correcao de navegacao do commit
 53642b3ca42b3263378cc1db8e005c9d7c382c3c. A versao local foi reconciliada com

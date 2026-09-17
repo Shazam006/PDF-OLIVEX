@@ -4,7 +4,7 @@ Verificacao em 17/09/2026, Windows, Python 3.12 e Chrome headless.
 
 ## Resultado
 
-- Backend e codigo frontend: 82 testes passaram; 7 testes de motores externos foram ignorados.
+- Backend e codigo frontend: 85 testes passaram; 7 testes de motores externos foram ignorados.
 - Navegador com API: 32 verificacoes passaram, sem erros JavaScript.
 - Navegador estatico: 18 verificacoes passaram sem nenhum POST para a API.
 - Cinco abas verificadas no desktop e em telas de 320, 390 e 768 pixels.
@@ -43,10 +43,22 @@ Docker nao esta disponivel nesta maquina. O Dockerfile, Compose, Nginx e o
 workflow de testes com motores reais foram preparados, mas nao executados aqui.
 Os sete testes ignorados cobrem OCR em por/eng/spa, Office DOCX/XLSX/PPTX e PDF/A.
 
-Na CI do GitHub, o job `engines` executou o contêiner: 88 testes passaram,
+Na CI do GitHub, o job `engines` executou o contêiner: 91 testes passaram,
 incluindo os sete testes de motores reais. Apenas a verificacao Node foi
 ignorada nesse contêiner; ela pertence ao job separado de frontend.
-Execucao: https://github.com/Shazam006/PDF-OLIVEX/actions/runs/35284218688.
+Execucao: https://github.com/Shazam006/PDF-OLIVEX/actions/runs/35284704213.
+
+## Publicacao
+
+PR #4 integrada na `main`, commit de codigo
+`5896c3e8b396442eed234fecbc68367fef22a840`.
+GitHub Pages concluiu a publicacao com sucesso. O site publico passou nas
+18 verificacoes estaticas, incluindo ordem e rotacao dos downloads, texto e
+vetores preservados, imagens nao vazias e interface mobile sem overflow.
+Site: https://shazam006.github.io/PDF-OLIVEX/.
+
+Operacoes avancadas ainda dependem de API com os motores. Publicar o frontend
+nao implanta backend AWS nem HTTPS/Nginx da infraestrutura exclusiva.
 
 Nao houve implantacao na AWS nesta retomada.
 Nenhum recurso GeoVida foi alterado. A homologacao de producao ainda exige
