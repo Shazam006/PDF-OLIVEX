@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+work/
+artifacts/
+node_modules/
+*.log
+.env
+*.pem
+*.key
+*.p12
+*.pfx
+deploy/certs/
