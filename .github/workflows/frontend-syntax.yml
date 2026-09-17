@@ -22,4 +22,4 @@ jobs:
       - name: Install test dependencies
         run: pip install pytest
       - name: Validate frontend JavaScript
-        run: pytest -q tests/test_frontend_syntax.py
+        run: pytest --noconftest -q tests/test_frontend_syntax.py

@@ -1,7 +1,7 @@
 name: Verify PDF OLIVEX
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -31,7 +31,11 @@ jobs:
           npm run test:static
       - uses: actions/upload-artifact@v4
         if: always()
-        with: {name: browser-evidence, path: artifacts/}
+        with:
+          name: browser-evidence
+          path: |
+            artifacts/ui/
+            artifacts/static/
   engines:
     runs-on: ubuntu-latest
     steps:

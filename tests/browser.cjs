@@ -12,8 +12,14 @@ const base=process.env.PDF_OLIVEX_URL||'http://127.0.0.1:8768';
 const completed=[];
 async function openTool(page,id) {const card=page.locator('#tool-'+id);if(!await card.evaluate(el=>el.open))await card.locator('summary').click();await card.locator('form').waitFor({state:'visible'});}
 async function captureDownload(page,action,name) {
-  const waiting=page.waitForEvent('download',{timeout:60000});await action();const download=await waiting;
-  assert.equal(await download.failure(),null);const target=path.join(output,name||download.suggestedFilename());await download.saveAs(target);assert.ok(fs.statSync(target).size>0);return target;
+  const waiting=page.waitForEvent('download',{timeout:60000});waiting.catch(()=>{});
+  let rejectFailure;const failure=new Promise((resolve,reject)=>{rejectFailure=reject;});
+  const diagnose=async response=>{if(response.request().method()==='POST'&&response.url().includes('/api/')&&response.status()>=400){
+    let detail='Falha de processamento';try{const payload=await response.json();if(typeof payload.detail==='string')detail=payload.detail;}catch{}
+    rejectFailure(new Error(`${name}: API ${response.status()} ${detail}`));}};
+  page.on('response',diagnose);
+  try {await action();const download=await Promise.race([waiting,failure]);assert.equal(await download.failure(),null);const target=path.join(output,name||download.suggestedFilename());await download.saveAs(target);assert.ok(fs.statSync(target).size>0);return target;}
+  finally {page.off('response',diagnose);}
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});

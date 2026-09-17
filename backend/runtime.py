@@ -44,7 +44,8 @@ MIMES = {
     ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
     ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
     ".pptx": {"application/vnd.openxmlformats-officedocument.presentationml.presentation"},
-    ".p12": {"application/x-pkcs12"}, ".pfx": {"application/x-pkcs12"},
+    ".p12": {"application/x-pkcs12", "application/pkcs12"},
+    ".pfx": {"application/x-pkcs12", "application/pkcs12"},
 }
 Image.MAX_IMAGE_PIXELS = 25_000_000
 

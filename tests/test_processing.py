@@ -234,7 +234,9 @@ def test_office_output_containers(client,pdf,table_pdf):
     assert post(client,"pdf-to-office",pdf,target="xlsx").status_code==400
 
 
-def test_signature_is_cryptographically_valid(client,pdf):
+@pytest.mark.parametrize("certificate_mime", ["application/x-pkcs12", "application/pkcs12"])
+@pytest.mark.parametrize("certificate_extension", ["p12", "pfx"])
+def test_signature_is_cryptographically_valid(client,pdf,certificate_mime,certificate_extension):
     from datetime import datetime,timedelta,timezone
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes,serialization
@@ -250,7 +252,7 @@ def test_signature_is_cryptographically_valid(client,pdf):
     now=datetime.now(timezone.utc)
     cert=x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=2)).add_extension(x509.KeyUsage(True,True,False,False,False,False,False,False,False),critical=True).sign(key,hashes.SHA256())
     bundle=pkcs12.serialize_key_and_certificates(b"test",key,cert,None,serialization.BestAvailableEncryption(b"secret"))
-    response=client.post("/api/sign",files={**upload(pdf),"certificate":("test.p12",bundle,"application/x-pkcs12")},data={"password":"secret"})
+    response=client.post("/api/sign",files={**upload(pdf),"certificate":("test."+certificate_extension,bundle,certificate_mime)},data={"password":"secret"})
     assert response.status_code==200,response.text[:1000] if response.status_code!=200 else ""
     reader=PdfFileReader(io.BytesIO(response.content));assert len(reader.embedded_signatures)==1
     context=ValidationContext(trust_roots=[asn1x509.Certificate.load(cert.public_bytes(serialization.Encoding.DER))],allow_fetching=False)

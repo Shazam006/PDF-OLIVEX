@@ -43,6 +43,11 @@ Docker nao esta disponivel nesta maquina. O Dockerfile, Compose, Nginx e o
 workflow de testes com motores reais foram preparados, mas nao executados aqui.
 Os sete testes ignorados cobrem OCR em por/eng/spa, Office DOCX/XLSX/PPTX e PDF/A.
 
+Na CI do GitHub, o job `engines` executou o contêiner: 88 testes passaram,
+incluindo os sete testes de motores reais. Apenas a verificacao Node foi
+ignorada nesse contêiner; ela pertence ao job separado de frontend.
+Execucao: https://github.com/Shazam006/PDF-OLIVEX/actions/runs/35284218688.
+
 Nao houve implantacao na AWS nesta retomada.
 Nenhum recurso GeoVida foi alterado. A homologacao de producao ainda exige
 Docker, EC2 exclusiva do PDF OLIVEX, dominio, HTTPS e testes com motores reais.
